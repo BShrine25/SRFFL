@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#F5F1E4;">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F5F1E4">
+<meta name="color-scheme" content="light">
+<title>SRFFL Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Slab:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: light;
+    --field:#0B0B0B;
+    --field-light:#262626;
+    --chalk:#F5F1E4;
+    --chalk-2:#ECE5D0;
+    --ink:#18170F;
+    --ink-soft:#5b5847;
+    --mustard:#FFB612;
+    --red:#A9382C;
+    --line:#D9D1B8;
+    --radius:5px;
+  }
+  *{ box-sizing:border-box; forced-color-adjust:none; }
+  html{ background:var(--chalk); }
+  body{
+    margin:0;
+    font-family:'Roboto Slab', serif;
+    background:var(--chalk);
+    color:var(--ink);
+    line-height:1.5;
+  }
+  h1,h2,h3,.brand,.tab,.badge{ font-family:'Anton', sans-serif; font-weight:400; letter-spacing:.02em; }
+
+  header.scoreboard{
+    position:sticky; top:0; z-index:20;
+    background:var(--field);
+    border-bottom:4px solid var(--mustard);
+    padding:.7rem 1.2rem;
+    display:flex; align-items:center; gap:1.5rem;
+    flex-wrap:wrap;
+  }
+  .brand{ color:var(--mustard); line-height:1.05; white-space:nowrap; }
+  .brand-line1{ display:block; font-size:1.35rem; }
+  .brand-line2{ display:block; font-size:.65rem; letter-spacing:.12em; }
+  .tabs{ display:flex; gap:.3rem; flex-wrap:wrap; }
+  .tab{
+    background:none; border:1px solid transparent; cursor:pointer;
+    color:#cfc9b3; font-size:.8rem; padding:.5rem .85rem; border-radius:3px;
+    font-family:'Roboto Slab',serif; font-weight:600;
+  }
+  .tab:hover{ background:var(--field-light); color:#fff; }
+  .tab.active{ background:var(--chalk); color:var(--field); }
+  .tab.soon{ color:#8a927f; font-style:italic; }
+  .tab.soon:hover{ background:var(--field-light); color:#d9d9c9; }
+
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center; gap:.75rem;
+    padding:.75rem 1.2rem; background:var(--chalk-2); border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .toolbar-left{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; font-size:.85rem; }
+  select{ font-family:'Roboto Slab',serif; padding:.35rem .5rem; border:1px solid var(--ink); border-radius:3px; background:var(--chalk); color:var(--ink); }
+  input, textarea{ font-family:'Roboto Slab',serif; color:var(--ink); background:var(--chalk); }
+  .editable-field[contenteditable="true"]{ outline:1px dashed var(--mustard); cursor:text; padding:1px 4px; border-radius:2px; background:#fff; color:var(--ink); }
+
+  .btn{
+    font-family:'Roboto Slab',serif; font-weight:600; font-size:.78rem;
+    border:1px solid var(--ink); background:transparent; color:var(--ink);
+    padding:.45rem .8rem; border-radius:3px; cursor:pointer;
+  }
+  .btn:hover{ background:var(--ink); color:var(--chalk); }
+  .btn-primary{ background:var(--mustard); border-color:var(--mustard); }
+  .btn-primary:hover{ background:#af8226; border-color:#af8226; color:var(--ink); }
+  .btn-danger{ border-color:var(--red); color:var(--red); }
+  .btn-danger:hover{ background:var(--red); color:#fff; }
+  .btn.small{ padding:.25rem .55rem; font-size:.7rem; }
+
+  main{ max-width:1100px; margin:0 auto; padding:1.3rem 1.2rem 3rem; background:var(--chalk); min-height:70vh; }
+  .panel{ display:none; background:var(--chalk); }
+  .panel.active{ display:block; }
+
+  .hint{ font-size:.82rem; color:var(--ink-soft); margin:0 0 1rem; }
+  .empty{
+    border:1px dashed var(--line); border-radius:var(--radius); padding:2rem 1.2rem;
+    text-align:center; color:var(--ink-soft); font-size:.9rem;
+  }
+
+  /* Rosters */
+  .roster-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(255px,1fr)); gap:1rem; }
+  .team-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .team-head{ display:flex; align-items:center; gap:.65rem; padding:.7rem .8rem; border-bottom:3px solid var(--card-color, var(--mustard)); }
+  .badge{
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    background:var(--card-color, var(--field)); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:.95rem;
+  }
+  .team-meta{ min-width:0; }
+  .team-name{ font-size:1.02rem; line-height:1.1; }
+  .team-name[contenteditable="true"]{ outline:1px dashed var(--mustard); cursor:text; padding:0 2px; }
+  .owner-name{ font-size:.76rem; color:var(--ink-soft); }
+  .owner-name[contenteditable="true"]{ outline:1px dashed var(--mustard); cursor:text; padding:0 2px; }
+  .team-actions{ margin-left:auto; }
+
+  table{ width:100%; border-collapse:collapse; font-size:.85rem; }
+  th,td{ padding:.4rem .8rem; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+  th{ font-size:.68rem; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); font-weight:600; }
+  td[contenteditable="true"]{ outline:1px dashed var(--mustard); cursor:text; }
+  td.pos{ width:64px; color:var(--ink-soft); font-size:.78rem; }
+  .row-del{ color:var(--red); background:none; border:none; cursor:pointer; font-size:.9rem; padding:0 .3rem; }
+  .add-row-btn{ width:100%; text-align:left; padding:.5rem .8rem; background:var(--chalk-2); border:none; border-top:1px solid var(--line); cursor:pointer; font-size:.78rem; color:var(--ink-soft); font-family:'Roboto Slab',serif; }
+  .add-row-btn:hover{ color:var(--ink); }
+
+  .add-team-card{
+    border:1px dashed var(--line); border-radius:var(--radius); display:flex;
+    align-items:center; justify-content:center; min-height:120px; cursor:pointer; color:var(--ink-soft); font-size:.85rem;
+    background:transparent;
+  }
+  .add-team-card:hover{ border-color:var(--mustard); color:var(--ink); }
+
+  /* Records */
+  .records-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:1.6rem; align-items:start; }
+  @media (max-width:800px){ .records-grid{ grid-template-columns:1fr; } }
+  .section-title{ font-size:1.15rem; margin:0 0 .6rem; color:var(--field); }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .card table td, .card table th{ padding:.45rem .7rem; }
+  .num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ledger-item{ padding:.75rem .9rem; border-bottom:1px solid var(--line); }
+  .ledger-item:last-child{ border-bottom:none; }
+  .ledger-top{ display:flex; justify-content:space-between; gap:.6rem; align-items:baseline; }
+  .ledger-title{ font-size:.88rem; font-weight:600; }
+  .ledger-title[contenteditable="true"], .ledger-value[contenteditable="true"], .ledger-note[contenteditable="true"]{
+    outline:1px dashed var(--mustard); cursor:text;
+  }
+  .ledger-value{ color:var(--mustard); font-weight:700; white-space:nowrap; }
+  .ledger-note{ font-size:.78rem; color:var(--ink-soft); margin-top:.15rem; }
+  .ledger-del{ float:right; }
+
+  /* Digest */
+  .digest-toolbar{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1.1rem; }
+  .digest-toolbar .current-flag{ font-size:.7rem; color:var(--field); background:var(--mustard); padding:.2rem .5rem; border-radius:3px; font-weight:700; letter-spacing:.03em; }
+  .cover-frame{
+    width:100%; max-width:420px; margin:0 auto 1.4rem; aspect-ratio:3/4;
+    background:var(--chalk-2); border:1px solid var(--line); border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;
+  }
+  .cover-frame.editable{ cursor:pointer; }
+  .cover-frame.editable:hover{ border-color:var(--mustard); }
+  .cover-frame img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cover-empty{ color:var(--ink-soft); font-size:.85rem; text-align:center; padding:1rem; }
+
+  .digest-article{ max-width:640px; margin:0 auto 1.6rem; }
+  .digest-article h3{ font-size:1rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.3rem; margin-bottom:.5rem; }
+  .digest-article .body-text{ font-size:.92rem; white-space:pre-wrap; min-height:1.4em; }
+  .digest-article .body-text:empty::before{ content:attr(data-placeholder); color:var(--ink-soft); font-style:italic; }
+
+  .matchup-card{ max-width:640px; margin:0 auto 1.2rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.1rem; }
+  .matchup-teams{ display:flex; align-items:center; justify-content:center; gap:.9rem; margin-bottom:.9rem; }
+  .team-side{ flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; gap:.3rem; max-width:170px; }
+  .side-logo{
+    width:54px; height:54px; border-radius:8px; background:var(--chalk-2); border:1px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:.65rem; color:var(--ink-soft);
+  }
+  .side-logo.editable{ cursor:pointer; }
+  .side-logo.editable:hover{ border-color:var(--mustard); }
+  .side-logo img{ width:100%; height:100%; object-fit:cover; }
+  .side-name{ font-family:'Anton',sans-serif; font-size:.92rem; line-height:1.1; }
+  .side-record{ font-size:.75rem; color:var(--ink-soft); }
+  .vs-label{ font-family:'Anton',sans-serif; color:var(--ink-soft); font-size:.8rem; flex-shrink:0; }
+
+  .matchup-writeup{ font-size:.88rem; margin-bottom:.9rem; }
+  .positions-table{ width:100%; margin-bottom:.7rem; border-collapse:collapse; }
+  .positions-table td{ border-bottom:1px solid var(--line); padding:.35rem .4rem; }
+  .pos-label{ text-align:center; font-size:.72rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; width:64px; }
+  .check-cell{ width:38%; text-align:center; }
+  .check-btn{ width:26px; height:26px; border-radius:50%; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:.8rem; line-height:24px; color:transparent; }
+  .check-btn.active{ background:var(--mustard); border-color:var(--mustard); color:var(--field); }
+  .pos-del{ color:var(--red); background:none; border:none; cursor:pointer; font-size:.85rem; }
+
+  .line-row, .prediction-row{ font-size:.85rem; margin-bottom:.5rem; }
+  .line-row .field-label, .prediction-row .field-label{ display:block; font-weight:600; color:var(--ink-soft); font-size:.68rem; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.15rem; }
+  .matchup-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:.6rem; }
+  .digest-add-row{ max-width:640px; margin:0 auto 1.6rem; display:flex; gap:.5rem; justify-content:center; }
+
+  .soon-box{ text-align:center; padding:3rem 1rem; }
+  .soon-box h2{ font-size:1.4rem; color:var(--field); margin-bottom:.4rem; }
+  .soon-box p{ color:var(--ink-soft); font-size:.9rem; max-width:420px; margin:0 auto; }
+
+  /* Schedule */
+  .schedule-toolbar{ display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
+  .schedule-week-group{ margin-bottom:1.1rem; }
+  .schedule-week-group h4{ font-size:.72rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; margin:0 0 .4rem; }
+  .game-row{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; cursor:pointer; font-size:.86rem; }
+  .game-row:hover{ border-color:var(--mustard); }
+  .game-row .score{ font-weight:700; white-space:nowrap; }
+  .game-row .status{ font-size:.66rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .game-detail-header{ text-align:center; margin-bottom:1rem; }
+  .game-detail-score{ display:flex; align-items:center; justify-content:center; gap:1rem; font-family:'Anton',sans-serif; font-size:1.5rem; margin:.6rem 0 1.2rem; }
+  .game-detail-score input{ width:64px; text-align:center; font-family:'Anton',sans-serif; font-size:1.4rem; border:1px solid var(--line); border-radius:4px; padding:.2rem; color:var(--ink); background:#fff; }
+  .game-detail-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:640px; margin:0 auto; }
+  @media (max-width:700px){ .game-detail-grid{ grid-template-columns:1fr; } }
+  .player-points-input{ width:52px; text-align:right; border:1px solid var(--line); border-radius:3px; padding:.15rem .3rem; color:var(--ink); background:#fff; }
+
+  /* Standings */
+  .playoff-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:3px solid var(--mustard); border-bottom:3px solid var(--mustard); }
+
+  /* Transactions */
+  .txn-row{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; font-size:.86rem; }
+  .txn-row .txn-action{ font-weight:700; }
+  .txn-row .txn-action.add{ color:var(--field); }
+  .txn-row .txn-action.drop{ color:var(--red); }
+  .txn-row .txn-week{ font-size:.7rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+
+  /* Locking / started */
+  .lock-badge{ font-size:.66rem; text-transform:uppercase; letter-spacing:.03em; color:var(--field); background:var(--mustard); padding:.15rem .4rem; border-radius:3px; margin-left:.4rem; }
+  .started-toggle{ display:flex; align-items:center; gap:.3rem; font-size:.72rem; color:var(--ink-soft); }
+
+  /* Roster baseline editor */
+  .baseline-btn{ background:none; border:none; color:var(--ink-soft); cursor:pointer; font-size:.7rem; text-decoration:underline; }
+  .baseline-panel{ background:var(--chalk-2); border-top:1px solid var(--line); padding:.6rem .8rem; }
+
+  /* Multi-team leaderboard rows */
+  .expand-toggle{ background:none; border:none; cursor:pointer; color:var(--ink-soft); font-size:.75rem; margin-right:.3rem; }
+  tr.split-row td{ background:var(--chalk-2); font-size:.82rem; color:var(--ink-soft); }
+
+  /* Stats */
+  #statsTable th{ cursor:pointer; user-select:none; white-space:nowrap; }
+  #statsTable th.sorted{ color:var(--field); }
+  #statsTable th .sort-arrow{ margin-left:.2rem; color:var(--mustard); }
+  .stats-team-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); margin-bottom:1rem; overflow:hidden; }
+  .stats-team-card h4{ margin:0; padding:.6rem .8rem; font-size:.95rem; color:var(--field); border-bottom:1px solid var(--line); }
+  .stats-table td.num, .stats-table th.num{ text-align:right; }
+
+  /* Game stat entry */
+  .player-stat-block{ border-bottom:1px solid var(--line); padding:.6rem 0; }
+  .player-stat-block:last-child{ border-bottom:none; }
+  .player-stat-head{ display:flex; justify-content:space-between; align-items:baseline; font-size:.85rem; margin-bottom:.4rem; }
+  .player-stat-head .pos-tag{ font-size:.68rem; color:var(--ink-soft); }
+  .player-stat-head .player-pts{ font-weight:700; color:var(--field); white-space:nowrap; }
+  .stat-field-grid{ display:flex; flex-wrap:wrap; gap:.5rem; }
+  .stat-field{ display:flex; flex-direction:column; gap:.15rem; font-size:.65rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.02em; }
+  .stat-field input{ width:58px; border:1px solid var(--line); border-radius:3px; padding:.2rem .3rem; font-size:.8rem; text-align:right; color:var(--ink); background:#fff; }
+
+  /* Trade Simulator */
+  .trade-teams-select{ display:flex; gap:1.2rem; margin-bottom:1.1rem; flex-wrap:wrap; }
+  .trade-teams-select > div{ display:flex; flex-direction:column; gap:.3rem; font-size:.75rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
+  .trade-builder{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.1rem; }
+  @media (max-width:700px){ .trade-builder{ grid-template-columns:1fr; } }
+  .trade-col{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.8rem; }
+  .trade-col h4{ margin:0 0 .5rem; font-size:.95rem; color:var(--field); }
+  .trade-player-row{ display:flex; align-items:center; gap:.55rem; padding:.35rem 0; border-bottom:1px solid var(--line); font-size:.85rem; cursor:pointer; }
+  .trade-player-row:last-child{ border-bottom:none; }
+  .trade-actions{ display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:1.3rem; }
+  .verdict-card, .suggestion-card{ max-width:640px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.1rem; margin-bottom:1rem; font-size:.88rem; }
+  .verdict-badge{ display:inline-block; padding:.3rem .7rem; border-radius:3px; font-family:'Anton',sans-serif; font-size:.82rem; margin-bottom:.6rem; background:var(--mustard); color:var(--field); }
+  .suggestion-side{ margin-bottom:.3rem; }
+  .loading-text{ color:var(--ink-soft); font-size:.85rem; font-style:italic; }
+
+  #toast{
+    position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:var(--chalk); padding:.6rem 1rem; border-radius:4px;
+    font-size:.82rem; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; z-index:50;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body style="background:#F5F1E4; color:#18170F; min-height:100vh;">
+
+<header class="scoreboard">
+  <div class="brand">
+    <span class="brand-line1">STEELERS RULE</span>
+    <span class="brand-line2">FANTASY FOOTBALL</span>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="rosters">Rosters</button>
+    <button class="tab" data-tab="schedule">Schedule</button>
+    <button class="tab" data-tab="transactions">Transactions</button>
+    <button class="tab" data-tab="standings">Standings</button>
+    <button class="tab" data-tab="stats">Stats</button>
+    <button class="tab" data-tab="records">Record Book</button>
+    <button class="tab" data-tab="digest">SRFFL Digest</button>
+    <button class="tab" data-tab="tradesim">Trade Sim</button>
+  </nav>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-left" id="rosterToolbar">
+    <span>Season</span>
+    <select id="seasonSelect"></select>
+    <button class="btn small" id="addSeasonBtn">+ Add season</button>
+  </div>
+  <div class="toolbar-right" style="display:flex; gap:.5rem; align-items:center;">
+    <button class="btn small" id="changePinBtn" style="display:none;">Change PIN</button>
+    <button class="btn" id="editToggle">Edit mode: Off</button>
+  </div>
+</div>
+
+<main>
+
+  <section class="panel active" id="panel-rosters">
+    <p class="hint">Rosters for the selected season. Turn on Edit mode to add teams, rename owners, and edit players.</p>
+    <div id="rostersRoot"></div>
+  </section>
+
+  <section class="panel" id="panel-schedule">
+    <div id="scheduleListView">
+      <p class="hint">Games for <span id="scheduleSeasonLabel"></span>. Click a game to enter the final score and player stats.</p>
+      <div class="schedule-toolbar">
+        <span>View</span>
+        <select id="scheduleFilterType">
+          <option value="all">All games</option>
+          <option value="team">By team</option>
+          <option value="week">By week</option>
+        </select>
+        <select id="scheduleTeamFilter" style="display:none;"></select>
+        <select id="scheduleWeekFilter" style="display:none;"></select>
+      </div>
+      <div id="scheduleList"></div>
+      <div class="digest-add-row" id="addGameRow" style="display:none;">
+        <button class="btn small" id="addGameBtn">+ Add game</button>
+      </div>
+      <div id="addGameForm" class="card" style="display:none; max-width:480px; margin:0 auto 1.2rem; padding:1rem;"></div>
+    </div>
+    <div id="scheduleDetailView" style="display:none;">
+      <button class="btn small" id="backToScheduleBtn" style="margin-bottom:1rem;">← Back to schedule</button>
+      <div id="gameDetailRoot"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-transactions">
+    <p class="hint">Add/drop moves for <span id="txnSeasonLabel"></span>. Adding or dropping here updates the live roster immediately — future weeks pick up the new roster, past weeks keep who was there at the time.</p>
+    <div class="digest-add-row" id="addTxnRow" style="display:none;">
+      <button class="btn small" id="addTxnBtn">+ Add transaction</button>
+    </div>
+    <div id="addTxnForm" class="card" style="display:none; max-width:480px; margin:0 auto 1.2rem; padding:1rem;"></div>
+    <div id="txnList"></div>
+  </section>
+
+  <section class="panel" id="panel-standings">
+    <p class="hint">Standings for <span id="standingsSeasonLabel"></span>. Ties broken by head-to-head, then Points For, then differential. Top 8 make the playoffs.</p>
+    <div class="card">
+      <table id="standingsSeasonTable">
+        <thead><tr id="standingsSeasonHead"></tr></thead>
+        <tbody id="standingsSeasonBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-stats">
+    <p class="hint">Season stats for <span id="statsSeasonLabel"></span>, entered on the Schedule tab. Pick a category below — sortable by any column.</p>
+    <div class="digest-toolbar">
+      <span>Category</span>
+      <select id="statsCategorySelect">
+        <option value="passing">Passing</option>
+        <option value="rushing">Rushing</option>
+        <option value="receiving">Receiving</option>
+        <option value="defense">Defense</option>
+        <option value="kicking">Kicking</option>
+      </select>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table id="statsTable">
+        <thead><tr id="statsTableHead"></tr></thead>
+        <tbody id="statsTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-records">
+    <div class="records-grid">
+      <div>
+        <h2 class="section-title">All-Time Standings</h2>
+        <div class="card">
+          <table id="standingsTable">
+            <thead>
+              <tr><th>Owner</th><th>Team</th><th class="num">W</th><th class="num">L</th><th class="num">T</th><th class="num">Titles</th><th class="num">PF</th><th class="num">PA</th><th></th></tr>
+            </thead>
+            <tbody id="standingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2 class="section-title">League Records</h2>
+        <div class="card" id="leagueRecordsCard"></div>
+        <button class="btn small" id="addRecordBtn" style="margin-top:.6rem; display:none;">+ Add record</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-digest">
+    <div class="digest-toolbar">
+      <span>Year</span>
+      <select id="digestYearSelect"></select>
+      <span>Issue</span>
+      <select id="digestWeekSelect"></select>
+      <span id="currentFlag" class="current-flag" style="display:none;">CURRENT</span>
+      <button class="btn small" id="setCurrentBtn" style="display:none;">Set as current</button>
+    </div>
+
+    <div class="cover-frame" id="coverFrame">
+      <div class="cover-empty" id="coverEmpty">No cover yet</div>
+      <img id="coverImg" style="display:none;">
+    </div>
+    <input type="file" accept="image/*" id="coverInput" style="display:none;">
+
+    <div id="digestReviewSection" class="digest-article" style="display:none;">
+      <h3 id="reviewHeading">Weekly Review</h3>
+      <div class="body-text editable-field" id="reviewText" data-placeholder="No review written yet."></div>
+    </div>
+
+    <div id="digestPreviewSection" style="display:none;">
+      <div id="matchupsRoot"></div>
+      <div class="digest-add-row" id="addMatchupRow" style="display:none;">
+        <button class="btn small" id="addMatchupBtn">+ Add matchup</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-tradesim">
+    <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then ask AI to weigh in — or skip straight to trade suggestions based on roster needs.</p>
+    <div class="trade-teams-select">
+      <div>Team A <select id="tradeTeamA"></select></div>
+      <div>Team B <select id="tradeTeamB"></select></div>
+    </div>
+    <div class="trade-builder" id="tradeBuilder"></div>
+    <div class="trade-actions">
+      <button class="btn btn-primary" id="assessTradeBtn">Ask AI to assess this trade</button>
+      <button class="btn" id="suggestTradesBtn">Suggest trades between these teams</button>
+    </div>
+    <div id="tradeResult"></div>
+  </section>
+
+  <section class="panel" id="panel-soon">
+    <div class="soon-box">
+      <h2 id="soonTitle">Coming soon</h2>
+      <p id="soonBody">This section isn't built yet — it's next up on the roadmap.</p>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+const TEAM_COLORS = ['#8B3A3A','#2E5C8B','#3E7A4B','#A17A2E','#5C3E8B','#2E8B7A','#8B4A2E','#4A5C8B','#7A8B2E','#8B3A70','#2E7A8B','#6B4A8B'];
+const STORAGE_KEY = 'srffl-league-data';
+
+let data = null;
+let editMode = false;
+let currentSeason = null;
+let currentDigestYear = null;
+let currentDigestWeek = null;
+let currentGameId = null;
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+const DIGEST_YEARS = [2025, 2026];
+const DIGEST_WEEKS = Array.from({length:18}, (_,i)=>i+1);
+
+function defaultData(){
+  const year = new Date().getFullYear();
+  return {
+    owners: [],
+    seasons: [year],
+    rosters: { [year]: {} },
+    allTime: {},
+    leagueRecords: [],
+    digest: {},
+    currentDigest: null,
+    pin: null,
+    schedule: {},
+    transactions: {},
+    statBaselines: {}
+  };
+}
+
+async function loadData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, true);
+    data = res && res.value ? JSON.parse(res.value) : defaultData();
+  }catch(e){
+    data = defaultData();
+  }
+  if(!data.seasons || !data.seasons.length){ data.seasons = [new Date().getFullYear()]; }
+  if(!data.digest) data.digest = {};
+  if(data.currentDigest === undefined) data.currentDigest = null;
+  if(data.pin === undefined) data.pin = null;
+  if(!data.schedule) data.schedule = {};
+  if(!data.transactions) data.transactions = {};
+  if(!data.statBaselines) data.statBaselines = {};
+  currentSeason = data.seasons[data.seasons.length-1];
+  currentDigestYear = data.currentDigest ? data.currentDigest.year : DIGEST_YEARS[DIGEST_YEARS.length-1];
+  currentDigestWeek = data.currentDigest ? data.currentDigest.week : '1A';
+}
+
+async function saveData(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data), true);
+  }catch(e){
+    toast('Save failed — check your connection and try again.');
+  }
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function colorFor(idx){ return TEAM_COLORS[idx % TEAM_COLORS.length]; }
+
+function fixEditableContrast(){
+  document.querySelectorAll('[contenteditable="true"], .editable-field').forEach(el=>{
+    el.style.setProperty('color', '#18170F', 'important');
+    el.style.setProperty('background-color', '#FFFFFF', 'important');
+    el.style.setProperty('-webkit-text-fill-color', '#18170F', 'important');
+  });
+}
+
+function initials(name){
+  return (name||'').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+
+/* ---------- Rosters ---------- */
+
+function renderSeasonSelect(){
+  const sel = document.getElementById('seasonSelect');
+  sel.innerHTML = '';
+  [...data.seasons].sort((a,b)=>b-a).forEach(y=>{
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y;
+    if(y === currentSeason) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function ensureSeasonRosters(year){
+  if(!data.rosters[year]) data.rosters[year] = {};
+  data.owners.forEach(o=>{
+    if(!data.rosters[year][o.id]) data.rosters[year][o.id] = [];
+  });
+}
+
+function renderRosters(){
+  const root = document.getElementById('rostersRoot');
+  root.innerHTML = '';
+
+  if(data.owners.length === 0){
+    root.innerHTML = `<div class="empty">No teams yet. Turn on Edit mode, then click "Add team" to set up your 12 owners.</div>`;
+    if(editMode){
+      const addCard = document.createElement('div');
+      addCard.className = 'add-team-card';
+      addCard.style.marginTop = '1rem';
+      addCard.textContent = '+ Add team';
+      addCard.onclick = addTeam;
+      root.appendChild(addCard);
+    }
+    return;
+  }
+
+  ensureSeasonRosters(currentSeason);
+  const seasonStats = computeSeasonStats(currentSeason);
+
+  const grid = document.createElement('div');
+  grid.className = 'roster-grid';
+
+  data.owners.forEach((owner, idx)=>{
+    const card = document.createElement('div');
+    card.className = 'team-card';
+    card.style.setProperty('--card-color', colorFor(idx));
+
+    const head = document.createElement('div');
+    head.className = 'team-head';
+    head.innerHTML = `
+      <div class="badge">${initials(owner.team || owner.name)}</div>
+      <div class="team-meta">
+        <div class="team-name" ${editMode?'contenteditable="true"':''} data-field="team" data-owner="${owner.id}">${owner.team || 'Unnamed Team'}</div>
+        <div class="owner-name" ${editMode?'contenteditable="true"':''} data-field="name" data-owner="${owner.id}">${owner.name || 'Owner name'}</div>
+      </div>
+      ${editMode ? `<div class="team-actions"><button class="btn-danger btn small" data-del-owner="${owner.id}">Remove</button></div>` : ''}
+    `;
+    card.appendChild(head);
+
+    const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
+    const players = data.rosters[currentSeason][owner.id] || [];
+    players.forEach((p, pi)=>{
+      const tr = document.createElement('tr');
+      const pts = seasonStats[statKey(p.name)] ? seasonStats[statKey(p.name)].points : '—';
+      tr.innerHTML = `
+        <td ${editMode?'contenteditable="true"':''} data-owner="${owner.id}" data-pi="${pi}" data-field="name">${p.name}</td>
+        <td class="pos" ${editMode?'contenteditable="true"':''} data-owner="${owner.id}" data-pi="${pi}" data-field="pos">${p.pos}</td>
+        <td class="pts" style="width:44px; text-align:right; color:var(--ink-soft); font-size:.78rem;">${pts}</td>
+        ${editMode ? `<td style="width:50px; white-space:nowrap;"><button class="baseline-btn" data-baseline-toggle="${owner.id}:${pi}">Stats</button> <button class="row-del" data-del-player="${owner.id}:${pi}">×</button></td>` : ''}
+      `;
+      tbody.appendChild(tr);
+      if(editMode){
+        const baselineTr = document.createElement('tr');
+        baselineTr.className = 'baseline-row';
+        baselineTr.style.display = 'none';
+        baselineTr.dataset.baselineFor = `${owner.id}:${pi}`;
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'baseline-panel';
+        baselineTr.appendChild(td);
+        tbody.appendChild(baselineTr);
+      }
+    });
+    if(players.length === 0){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="4" style="color:var(--ink-soft); font-size:.8rem;">No players added yet</td>`;
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    card.appendChild(table);
+
+    if(editMode){
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-row-btn';
+      addBtn.textContent = '+ Add player';
+      addBtn.onclick = ()=> addPlayer(owner.id);
+      card.appendChild(addBtn);
+    }
+
+    grid.appendChild(card);
+  });
+
+  if(editMode){
+    const addCard = document.createElement('div');
+    addCard.className = 'add-team-card';
+    addCard.textContent = '+ Add team';
+    addCard.onclick = addTeam;
+    grid.appendChild(addCard);
+  }
+
+  root.appendChild(grid);
+  wireRosterEdits(root);
+  fixEditableContrast();
+}
+
+function ensureBaseline(year, ownerId, playerName, playerPos){
+  if(!data.statBaselines[year]) data.statBaselines[year] = {};
+  if(!data.statBaselines[year][ownerId]) data.statBaselines[year][ownerId] = {};
+  const key = statKey(playerName);
+  if(!data.statBaselines[year][ownerId][key]){
+    data.statBaselines[year][ownerId][key] = { name: playerName, pos: playerPos, raw: {}, points: 0, gp: 0, gs: 0 };
+  }
+  return data.statBaselines[year][ownerId][key];
+}
+
+function renderBaselineEditor(td, ownerId, player){
+  const normPos = normalizePos(player.pos);
+  const fields = POSITION_FIELDS[normPos] || [];
+  const baseline = (data.statBaselines[currentSeason]?.[ownerId] || {})[statKey(player.name)] || { raw:{}, points:0, gp:0, gs:0 };
+  const fieldInputs = fields.map(f=>`
+    <label class="stat-field">
+      <span>${f.l}</span>
+      <input type="number" step="any" class="baseline-input" data-key="${f.k}" value="${baseline.raw && baseline.raw[f.k] !== undefined ? baseline.raw[f.k] : ''}">
+    </label>
+  `).join('');
+  td.innerHTML = `
+    <p class="hint" style="margin:0 0 .4rem;">Manual season baseline — combines with anything entered on the Schedule tab going forward. Use this to backfill stats for a free agent's earlier games.</p>
+    <div class="stat-field-grid">
+      <label class="stat-field"><span>GP</span><input type="number" class="baseline-input" data-key="__gp" value="${baseline.gp || ''}"></label>
+      <label class="stat-field"><span>GS</span><input type="number" class="baseline-input" data-key="__gs" value="${baseline.gs || ''}"></label>
+      ${fieldInputs}
+    </div>
+    <button class="btn small btn-primary" style="margin-top:.5rem;" id="saveBaselineBtn">Save baseline</button>
+  `;
+  td.querySelector('#saveBaselineBtn').addEventListener('click', ()=>{
+    const raw = {};
+    let gp = 0, gs = 0;
+    td.querySelectorAll('.baseline-input').forEach(input=>{
+      if(input.value === '') return;
+      if(input.dataset.key === '__gp') gp = Number(input.value);
+      else if(input.dataset.key === '__gs') gs = Number(input.value);
+      else raw[input.dataset.key] = Number(input.value);
+    });
+    const points = computeFantasyPoints(normPos, raw);
+    ensureBaseline(currentSeason, ownerId, player.name, player.pos);
+    data.statBaselines[currentSeason][ownerId][statKey(player.name)] = { name: player.name, pos: player.pos, raw, points, gp, gs };
+    saveData();
+    toast('Baseline saved');
+    renderRosters();
+    renderStats();
+  });
+}
+
+function wireRosterEdits(root){
+  root.querySelectorAll('[data-field][data-owner]:not([data-pi])').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const owner = data.owners.find(o=>o.id === el.dataset.owner);
+      if(owner) owner[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  root.querySelectorAll('td[data-pi]').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const list = data.rosters[currentSeason][el.dataset.owner];
+      const p = list[Number(el.dataset.pi)];
+      if(p) p[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  root.querySelectorAll('[data-del-owner]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('Remove this team? This deletes its rosters too.')) return;
+      const id = btn.dataset.delOwner;
+      data.owners = data.owners.filter(o=>o.id !== id);
+      Object.keys(data.rosters).forEach(y=> delete data.rosters[y][id]);
+      delete data.allTime[id];
+      saveData();
+      renderRosters();
+      renderRecords();
+    });
+  });
+  root.querySelectorAll('[data-baseline-toggle]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const key = btn.dataset.baselineToggle;
+      const [ownerId, piStr] = key.split(':');
+      const player = data.rosters[currentSeason][ownerId][Number(piStr)];
+      const row = root.querySelector(`.baseline-row[data-baseline-for="${CSS.escape(key)}"]`);
+      if(!row || !player) return;
+      const isHidden = row.style.display === 'none';
+      if(isHidden){
+        renderBaselineEditor(row.querySelector('td'), ownerId, player);
+        row.style.display = 'table-row';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+  root.querySelectorAll('[data-del-player]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [ownerId, pi] = btn.dataset.delPlayer.split(':');
+      data.rosters[currentSeason][ownerId].splice(Number(pi),1);
+      saveData();
+      renderRosters();
+    });
+  });
+}
+
+function addTeam(){
+  const name = prompt('Owner name:');
+  if(!name) return;
+  const team = prompt('Team name:', name + "'s Team") || (name + "'s Team");
+  const id = uid();
+  data.owners.push({ id, name, team });
+  data.seasons.forEach(y=>{
+    if(!data.rosters[y]) data.rosters[y] = {};
+    data.rosters[y][id] = [];
+  });
+  data.allTime[id] = { seasons:0, wins:0, losses:0, ties:0, titles:0, pf:0, pa:0 };
+  saveData();
+  renderRosters();
+  renderRecords();
+}
+
+function addPlayer(ownerId){
+  const name = prompt('Player name:');
+  if(!name) return;
+  const pos = prompt('Position (QB, RB, WR, TE, DEF, or K):', '') || '';
+  data.rosters[currentSeason][ownerId].push({ name, pos });
+  saveData();
+  renderRosters();
+}
+
+/* ---------- Record Book ---------- */
+
+function renderStandings(){
+  const body = document.getElementById('standingsBody');
+  body.innerHTML = '';
+  if(data.owners.length === 0){
+    body.innerHTML = `<tr><td colspan="9" style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
+    return;
+  }
+  const rows = data.owners.map(o=>({ owner:o, rec: data.allTime[o.id] || (data.allTime[o.id]={seasons:0,wins:0,losses:0,ties:0,titles:0,pf:0,pa:0}) }));
+  rows.sort((a,b)=> (b.rec.wins - b.rec.losses) - (a.rec.wins - a.rec.losses));
+  rows.forEach(({owner, rec})=>{
+    const tr = document.createElement('tr');
+    const ed = editMode;
+    tr.innerHTML = `
+      <td>${owner.name}</td>
+      <td>${owner.team}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="wins">${rec.wins}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="losses">${rec.losses}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="ties">${rec.ties}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="titles">${rec.titles}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="pf">${rec.pf}</td>
+      <td class="num" ${ed?'contenteditable="true"':''} data-owner="${owner.id}" data-field="pa">${rec.pa}</td>
+      <td></td>
+    `;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('[data-field]').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const rec = data.allTime[el.dataset.owner];
+      const val = el.textContent.trim();
+      rec[el.dataset.field] = isNaN(Number(val)) ? 0 : Number(val);
+      saveData();
+    });
+  });
+  fixEditableContrast();
+}
+
+function renderLeagueRecords(){
+  const card = document.getElementById('leagueRecordsCard');
+  document.getElementById('addRecordBtn').style.display = editMode ? 'inline-block' : 'none';
+  card.innerHTML = '';
+  if(data.leagueRecords.length === 0){
+    card.innerHTML = `<div class="empty">No records logged yet — things like highest single-week score, biggest blowout, or longest win streak go here.</div>`;
+    return;
+  }
+  data.leagueRecords.forEach(r=>{
+    const div = document.createElement('div');
+    div.className = 'ledger-item';
+    div.innerHTML = `
+      <div class="ledger-top">
+        <span class="ledger-title" ${editMode?'contenteditable="true"':''} data-id="${r.id}" data-field="title">${r.title}</span>
+        <span class="ledger-value" ${editMode?'contenteditable="true"':''} data-id="${r.id}" data-field="value">${r.value}</span>
+      </div>
+      <div class="ledger-note" ${editMode?'contenteditable="true"':''} data-id="${r.id}" data-field="note">${r.note || 'Holder, year, notes...'}</div>
+      ${editMode ? `<button class="btn-danger btn small ledger-del" data-del-record="${r.id}">Remove</button>` : ''}
+    `;
+    card.appendChild(div);
+  });
+  card.querySelectorAll('[data-field]').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const rec = data.leagueRecords.find(r=>r.id === el.dataset.id);
+      if(rec) rec[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  card.querySelectorAll('[data-del-record]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      data.leagueRecords = data.leagueRecords.filter(r=>r.id !== btn.dataset.delRecord);
+      saveData();
+      renderLeagueRecords();
+    });
+  });
+  fixEditableContrast();
+}
+
+function addRecord(){
+  const title = prompt('Record name (e.g. "Highest single-week score"):');
+  if(!title) return;
+  const value = prompt('Value (e.g. "187.4 pts"):', '') || '';
+  const note = prompt('Holder / year / notes:', '') || '';
+  data.leagueRecords.push({ id: uid(), title, value, note });
+  saveData();
+  renderLeagueRecords();
+}
+
+function renderRecords(){
+  renderStandings();
+  renderLeagueRecords();
+}
+
+/* ---------- SRFFL Digest ---------- */
+
+const DEFAULT_POSITIONS = ['QB','RB','WR','TE','FLEX','DST','K'];
+
+function issueList(){
+  const list = [];
+  DIGEST_WEEKS.forEach(w=>{ list.push(w + 'A'); list.push(w + 'B'); });
+  return list;
+}
+
+function issueType(weekKey){ return weekKey.endsWith('A') ? 'preview' : 'review'; }
+
+function blankMatchup(){
+  return {
+    id: uid(),
+    teamA: { logo:'', name:'', record:'' },
+    teamB: { logo:'', name:'', record:'' },
+    writeup: '',
+    positions: DEFAULT_POSITIONS.map(p=>({ id: uid(), label: p, edge: null })),
+    line: '',
+    prediction: ''
+  };
+}
+
+function digestEntry(year, weekKey){
+  const y = String(year);
+  if(!data.digest[y]) data.digest[y] = {};
+  if(!data.digest[y][weekKey]){
+    data.digest[y][weekKey] = issueType(weekKey) === 'preview'
+      ? { cover:'', matchups:[] }
+      : { cover:'', review:'' };
+  }
+  return data.digest[y][weekKey];
+}
+
+function renderDigestSelects(){
+  const yearSel = document.getElementById('digestYearSelect');
+  const weekSel = document.getElementById('digestWeekSelect');
+  yearSel.innerHTML = '';
+  DIGEST_YEARS.forEach(y=>{
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y;
+    if(y === currentDigestYear) opt.selected = true;
+    yearSel.appendChild(opt);
+  });
+  weekSel.innerHTML = '';
+  issueList().forEach(key=>{
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = 'Week ' + key;
+    if(key === currentDigestWeek) opt.selected = true;
+    weekSel.appendChild(opt);
+  });
+}
+
+function renderDigest(){
+  const type = issueType(currentDigestWeek);
+  const entry = digestEntry(currentDigestYear, currentDigestWeek);
+
+  document.getElementById('setCurrentBtn').style.display = editMode ? 'inline-block' : 'none';
+  const isCurrent = data.currentDigest && data.currentDigest.year === currentDigestYear && data.currentDigest.week === currentDigestWeek;
+  document.getElementById('currentFlag').style.display = isCurrent ? 'inline-block' : 'none';
+
+  // Cover (click-to-upload)
+  const frame = document.getElementById('coverFrame');
+  const img = document.getElementById('coverImg');
+  const empty = document.getElementById('coverEmpty');
+  frame.classList.toggle('editable', editMode);
+  if(entry.cover){
+    img.src = entry.cover; img.style.display = 'block'; empty.style.display = 'none';
+  } else {
+    img.style.display = 'none'; empty.style.display = 'block';
+    empty.textContent = editMode ? 'Click to add a cover' : 'No cover yet';
+  }
+
+  // Toggle preview vs review sections
+  document.getElementById('digestReviewSection').style.display = type === 'review' ? 'block' : 'none';
+  document.getElementById('digestPreviewSection').style.display = type === 'preview' ? 'block' : 'none';
+  document.getElementById('addMatchupRow').style.display = (type === 'preview' && editMode) ? 'flex' : 'none';
+
+  if(type === 'review'){
+    const review = document.getElementById('reviewText');
+    review.textContent = entry.review || '';
+    review.contentEditable = editMode ? 'true' : 'false';
+    fixEditableContrast();
+  } else {
+    renderMatchups(entry);
+  }
+}
+
+function renderMatchups(entry){
+  const root = document.getElementById('matchupsRoot');
+  root.innerHTML = '';
+  if(entry.matchups.length === 0){
+    root.innerHTML = `<div class="empty" style="max-width:640px; margin:0 auto 1.2rem;">No matchups added yet.${editMode ? ' Click "+ Add matchup" below.' : ''}</div>`;
+    return;
+  }
+  entry.matchups.forEach(m=>{
+    const card = document.createElement('div');
+    card.className = 'matchup-card';
+    card.innerHTML = `
+      <div class="matchup-teams">
+        ${teamSideHTML(m, 'A')}
+        <div class="vs-label">VS</div>
+        ${teamSideHTML(m, 'B')}
+      </div>
+      <div class="matchup-writeup body-text editable-field" data-mid="${m.id}" data-field="writeup" ${editMode?'contenteditable="true"':''} data-placeholder="Matchup write-up...">${m.writeup}</div>
+      <table class="positions-table"><tbody>
+        ${m.positions.map(p=>`
+          <tr>
+            <td class="check-cell"><button class="check-btn ${p.edge==='A'?'active':''}" data-mid="${m.id}" data-pid="${p.id}" data-side="A" ${editMode?'':'disabled'}>✓</button></td>
+            <td class="pos-label">${p.label}${editMode?` <button class="pos-del" data-mid="${m.id}" data-pid="${p.id}">×</button>`:''}</td>
+            <td class="check-cell"><button class="check-btn ${p.edge==='B'?'active':''}" data-mid="${m.id}" data-pid="${p.id}" data-side="B" ${editMode?'':'disabled'}>✓</button></td>
+          </tr>
+        `).join('')}
+      </tbody></table>
+      ${editMode ? `<div style="text-align:center; margin-bottom:.7rem;"><button class="btn small" data-add-pos="${m.id}">+ Add position row</button></div>` : ''}
+      <div class="line-row">
+        <span class="field-label">Vegas Line</span>
+        <span class="editable-field" data-mid="${m.id}" data-field="line" ${editMode?'contenteditable="true"':''}>${m.line}</span>
+      </div>
+      <div class="prediction-row">
+        <span class="field-label">My Prediction</span>
+        <div class="body-text editable-field" data-mid="${m.id}" data-field="prediction" ${editMode?'contenteditable="true"':''}>${m.prediction}</div>
+      </div>
+      ${editMode ? `<div class="matchup-foot"><button class="btn-danger btn small" data-del-matchup="${m.id}">Remove matchup</button></div>` : ''}
+    `;
+    root.appendChild(card);
+  });
+  wireMatchupEvents(root, entry);
+  fixEditableContrast();
+}
+
+function teamSideHTML(m, side){
+  const team = side === 'A' ? m.teamA : m.teamB;
+  return `
+    <div class="team-side">
+      <div class="side-logo ${editMode?'editable':''}" data-mid="${m.id}" data-side="${side}" data-logo="1">
+        ${team.logo ? `<img src="${team.logo}">` : (editMode ? '+ Logo' : '')}
+      </div>
+      <div class="side-name editable-field" data-mid="${m.id}" data-side="${side}" data-field="name" ${editMode?'contenteditable="true"':''}>${team.name || 'Team name'}</div>
+      <div class="side-record editable-field" data-mid="${m.id}" data-side="${side}" data-field="record" ${editMode?'contenteditable="true"':''}>${team.record || 'Record'}</div>
+    </div>
+  `;
+}
+
+function findMatchup(entry, id){ return entry.matchups.find(m=>m.id === id); }
+
+function wireMatchupEvents(root, entry){
+  root.querySelectorAll('[data-field][data-mid]:not([data-side])').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const m = findMatchup(entry, el.dataset.mid);
+      if(m) m[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  root.querySelectorAll('[data-field][data-side]').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      const m = findMatchup(entry, el.dataset.mid);
+      if(m) (el.dataset.side === 'A' ? m.teamA : m.teamB)[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  root.querySelectorAll('[data-logo]').forEach(el=>{
+    if(!editMode) return;
+    el.addEventListener('click', ()=>{
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      input.onchange = ()=>{
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          const m = findMatchup(entry, el.dataset.mid);
+          (el.dataset.side === 'A' ? m.teamA : m.teamB).logo = reader.result;
+          saveData();
+          renderMatchups(entry);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    });
+  });
+  root.querySelectorAll('.check-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const m = findMatchup(entry, btn.dataset.mid);
+      const p = m.positions.find(p=>p.id === btn.dataset.pid);
+      p.edge = (p.edge === btn.dataset.side) ? null : btn.dataset.side;
+      saveData();
+      renderMatchups(entry);
+    });
+  });
+  root.querySelectorAll('[data-add-pos]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const m = findMatchup(entry, btn.dataset.addPos);
+      const label = prompt('Position label (e.g. QB, RB, WR):', '') || 'POS';
+      m.positions.push({ id: uid(), label, edge: null });
+      saveData();
+      renderMatchups(entry);
+    });
+  });
+  root.querySelectorAll('.pos-del').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const m = findMatchup(entry, btn.dataset.mid);
+      m.positions = m.positions.filter(p=>p.id !== btn.dataset.pid);
+      saveData();
+      renderMatchups(entry);
+    });
+  });
+  root.querySelectorAll('[data-del-matchup]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('Remove this matchup?')) return;
+      entry.matchups = entry.matchups.filter(m=>m.id !== btn.dataset.delMatchup);
+      saveData();
+      renderMatchups(entry);
+    });
+  });
+}
+
+document.getElementById('digestYearSelect').addEventListener('change', (e)=>{
+  currentDigestYear = Number(e.target.value);
+  renderDigest();
+});
+document.getElementById('digestWeekSelect').addEventListener('change', (e)=>{
+  currentDigestWeek = e.target.value;
+  renderDigest();
+});
+document.getElementById('setCurrentBtn').addEventListener('click', ()=>{
+  data.currentDigest = { year: currentDigestYear, week: currentDigestWeek };
+  saveData();
+  toast('Marked as current issue');
+  renderDigest();
+});
+document.getElementById('coverFrame').addEventListener('click', ()=>{
+  if(!editMode) return;
+  document.getElementById('coverInput').click();
+});
+document.getElementById('coverInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const entry = digestEntry(currentDigestYear, currentDigestWeek);
+    entry.cover = reader.result;
+    saveData();
+    renderDigest();
+  };
+  reader.onerror = ()=> toast('Could not read that image.');
+  reader.readAsDataURL(file);
+});
+document.getElementById('reviewText').addEventListener('blur', ()=>{
+  digestEntry(currentDigestYear, currentDigestWeek).review = document.getElementById('reviewText').textContent;
+  saveData();
+});
+document.getElementById('addMatchupBtn').addEventListener('click', ()=>{
+  const entry = digestEntry(currentDigestYear, currentDigestWeek);
+  entry.matchups.push(blankMatchup());
+  saveData();
+  renderMatchups(entry);
+});
+
+/* ---------- Scoring engine ---------- */
+
+function normalizePos(pos){
+  const p = (pos || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if(p === 'QB') return 'QB';
+  if(p === 'RB' || p === 'HB' || p === 'FB') return 'RB';
+  if(p === 'WR') return 'WR';
+  if(p === 'TE') return 'TE';
+  if(p === 'K' || p === 'PK') return 'K';
+  if(p === 'DEF' || p === 'DST' || p === 'DEFENSE' || p === 'DE') return 'DEF';
+  return 'OTHER';
+}
+
+const POSITION_FIELDS = {
+  QB: [
+    { k:'py', l:'Pass Yds' }, { k:'ptd', l:'Pass TD' }, { k:'int', l:'INT' }, { k:'pass2pt', l:'2pt Pass' },
+    { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' }, { k:'fuml', l:'Fum Lost' }
+  ],
+  RB: [
+    { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' },
+    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
+    { k:'fuml', l:'Fum Lost' }
+  ],
+  WR: [
+    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
+    { k:'fuml', l:'Fum Lost' }
+  ],
+  TE: [
+    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
+    { k:'fuml', l:'Fum Lost' }
+  ],
+  DEF: [
+    { k:'sk', l:'Sacks' }, { k:'dint', l:'INT' }, { k:'fr', l:'Fum Rec' }, { k:'ff', l:'Fum Forced' },
+    { k:'sf', l:'Safety' }, { k:'defTD', l:'Def/ST TD' }, { k:'blkk', l:'Blocked Kick' },
+    { k:'pa', l:'Pts Allowed' }, { k:'twoPtRet', l:'2pt Return' }, { k:'onePtSaf', l:'1pt Safety' }
+  ],
+  K: [
+    { k:'pat', l:'PAT Made' }, { k:'patm', l:'PAT Missed' },
+    { k:'fg0', l:'FG 0-39' }, { k:'fg40', l:'FG 40-49' }, { k:'fg50', l:'FG 50-59' }, { k:'fg60', l:'FG 60+' },
+    { k:'fgm0', l:'FG Miss 0-39' }, { k:'fgm40', l:'FG Miss 40-49' }
+  ],
+  OTHER: []
+};
+
+function yardageBonus(yards, tiers){
+  let bonus = 0;
+  tiers.forEach(([threshold, pts])=>{ if((yards || 0) >= threshold) bonus = pts; });
+  return bonus;
+}
+
+function pointsAllowedBracket(pa){
+  if(pa === undefined || pa === null || pa === '') return 0;
+  if(pa === 0) return 20;
+  if(pa <= 6) return 15;
+  if(pa <= 13) return 10;
+  if(pa <= 17) return 7.5;
+  if(pa <= 21) return 5;
+  if(pa <= 27) return 2;
+  if(pa <= 34) return -5;
+  if(pa <= 45) return -10;
+  return -20;
+}
+
+function computeFantasyPoints(normPos, raw){
+  const r = raw || {};
+  const n = (k)=> Number(r[k]) || 0;
+  switch(normPos){
+    case 'QB':
+      return n('py')*0.05 + yardageBonus(n('py'), [[300,1],[400,5]])
+        + n('ptd')*6 + n('int')*-2 + n('pass2pt')*2
+        + n('ry')*0.1 + yardageBonus(n('ry'), [[100,5],[200,10]])
+        + n('rtd')*6 + n('rush2pt')*2 + n('fuml')*-2;
+    case 'RB':
+      return n('ry')*0.1 + yardageBonus(n('ry'), [[100,5],[200,10]]) + n('rtd')*6 + n('rush2pt')*2
+        + n('rey')*0.1 + yardageBonus(n('rey'), [[100,3],[200,5]]) + n('rec')*0.5 + n('retd')*6 + n('rec2pt')*2
+        + n('fuml')*-2;
+    case 'WR':
+    case 'TE':
+      return n('rey')*0.1 + yardageBonus(n('rey'), [[100,3],[200,5]]) + n('rec')*0.5 + n('retd')*6 + n('rec2pt')*2
+        + n('fuml')*-2;
+    case 'DEF':
+      return n('sk')*1 + n('dint')*2 + n('fr')*1 + n('ff')*1 + n('sf')*3 + n('defTD')*6 + n('blkk')*2
+        + pointsAllowedBracket(r.pa === undefined || r.pa === '' ? null : Number(r.pa))
+        + n('twoPtRet')*2 + n('onePtSaf')*1;
+    case 'K':
+      return n('pat')*1 + n('patm')*-1 + n('fg0')*3 + n('fg40')*4 + n('fg50')*7 + n('fg60')*15
+        + n('fgm0')*-1 + n('fgm40')*-0.5;
+    default:
+      return 0;
+  }
+}
+
+const STAT_CATEGORIES = {
+  passing:   { label:'Passing',   positions:['QB'],           cols:[{k:'py',l:'YDS'},{k:'ptd',l:'TD'},{k:'int',l:'INT'}] },
+  rushing:   { label:'Rushing',   positions:['QB','RB'],       cols:[{k:'ry',l:'YDS'},{k:'rtd',l:'TD'}] },
+  receiving: { label:'Receiving', positions:['RB','WR','TE'],  cols:[{k:'rec',l:'REC'},{k:'rey',l:'YDS'},{k:'retd',l:'TD'}] },
+  defense:   { label:'Defense',   positions:['DEF'],           cols:[{k:'sk',l:'SK'},{k:'dint',l:'INT'},{k:'fr',l:'FR'},{k:'ff',l:'FF'},{k:'sf',l:'SAF'},{k:'defTD',l:'TD'},{k:'blkk',l:'BLK'},{k:'pa',l:'PA'}] },
+  kicking:   { label:'Kicking',   positions:['K'],             cols:[{k:'pat',l:'PAT'},{k:'fg0',l:'FG0-39'},{k:'fg40',l:'FG40-49'},{k:'fg50',l:'FG50-59'},{k:'fg60',l:'FG60+'}] }
+};
+
+/* ---------- Schedule & derived Stats ---------- */
+
+function statKey(name){ return (name || '').trim().toLowerCase(); }
+
+function ensureScheduleSeason(year){
+  if(!data.schedule[year]) data.schedule[year] = [];
+}
+
+function blankGame(week, homeId, awayId){
+  return { id: uid(), week: Number(week), homeId, awayId, homeScore: null, awayScore: null, locked: false, stats: {} };
+}
+
+function isPlayed(game){
+  return typeof game.homeScore === 'number' && typeof game.awayScore === 'number';
+}
+
+/* ---------- Transactions & roster history ---------- */
+
+function ensureTransactionsSeason(year){
+  if(!data.transactions[year]) data.transactions[year] = [];
+}
+
+function applyTransaction(year, ownerId, action, playerName, playerPos){
+  ensureSeasonRosters(year);
+  const roster = data.rosters[year][ownerId] || (data.rosters[year][ownerId] = []);
+  if(action === 'add'){
+    if(!roster.some(p=>statKey(p.name) === statKey(playerName))){
+      roster.push({ name: playerName, pos: playerPos });
+    }
+  } else {
+    const idx = roster.findIndex(p=>statKey(p.name) === statKey(playerName));
+    if(idx > -1) roster.splice(idx, 1);
+  }
+}
+
+function addTransaction(year, week, ownerId, action, playerName, playerPos){
+  ensureTransactionsSeason(year);
+  data.transactions[year].push({ id: uid(), week: Number(week), ownerId, action, playerName, pos: playerPos });
+  applyTransaction(year, ownerId, action, playerName, playerPos);
+}
+
+function computeRosterAsOfWeek(year, ownerId, week){
+  ensureSeasonRosters(year);
+  ensureTransactionsSeason(year);
+  const roster = [...(data.rosters[year][ownerId] || [])];
+  const laterTxns = data.transactions[year]
+    .filter(t=> t.ownerId === ownerId && t.week > week)
+    .sort((a,b)=> b.week - a.week);
+  laterTxns.forEach(t=>{
+    if(t.action === 'add'){
+      const idx = roster.findIndex(p=>statKey(p.name) === statKey(t.playerName));
+      if(idx > -1) roster.splice(idx, 1);
+    } else {
+      if(!roster.some(p=>statKey(p.name) === statKey(t.playerName))){
+        roster.push({ name: t.playerName, pos: t.pos });
+      }
+    }
+  });
+  return roster;
+}
+
+function renderTxnList(){
+  document.getElementById('txnSeasonLabel').textContent = currentSeason;
+  document.getElementById('addTxnRow').style.display = editMode ? 'flex' : 'none';
+  ensureTransactionsSeason(currentSeason);
+
+  const listRoot = document.getElementById('txnList');
+  if(data.owners.length === 0){
+    listRoot.innerHTML = `<div class="empty">Add teams in the Rosters tab first.</div>`;
+    return;
+  }
+  const txns = [...data.transactions[currentSeason]].sort((a,b)=> b.week - a.week);
+  if(txns.length === 0){
+    listRoot.innerHTML = `<div class="empty">No transactions logged yet.${editMode ? ' Click "+ Add transaction" below.' : ''}</div>`;
+    return;
+  }
+  listRoot.innerHTML = txns.map(t=>{
+    const owner = data.owners.find(o=>o.id === t.ownerId);
+    return `
+      <div class="txn-row">
+        <span><span class="txn-action ${t.action}">${t.action === 'add' ? 'Added' : 'Dropped'}</span> ${t.playerName} (${t.pos || '—'}) ${t.action === 'add' ? 'to' : 'from'} ${owner ? (owner.team || owner.name) : 'Unknown team'}</span>
+        <span style="display:flex; align-items:center; gap:.5rem;">
+          <span class="txn-week">Week ${t.week}</span>
+          ${editMode ? `<button class="btn-danger btn small" data-del-txn="${t.id}">Remove</button>` : ''}
+        </span>
+      </div>
+    `;
+  }).join('');
+
+  listRoot.querySelectorAll('[data-del-txn]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('Remove this transaction log entry? This does NOT automatically undo the roster change — adjust rosters manually if needed.')) return;
+      data.transactions[currentSeason] = data.transactions[currentSeason].filter(t=>t.id !== btn.dataset.delTxn);
+      saveData();
+      renderTxnList();
+    });
+  });
+}
+
+function renderAddTxnForm(){
+  const box = document.getElementById('addTxnForm');
+  box.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:.6rem; font-size:.85rem;">
+      <label>Action
+        <select id="newTxnAction" style="margin-left:.4rem;">
+          <option value="add">Add (pick up a free agent)</option>
+          <option value="drop">Drop</option>
+        </select>
+      </label>
+      <label>Week <input type="number" id="newTxnWeek" min="1" max="18" value="1" style="width:70px; margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
+      <label>Team <select id="newTxnTeam" style="margin-left:.4rem;"></select></label>
+      <div id="newTxnAddFields">
+        <label>Player name <input type="text" id="newTxnPlayerName" style="margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
+        <label style="margin-left:.8rem;">Position
+          <select id="newTxnPlayerPos" style="margin-left:.4rem;">
+            <option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>DEF</option><option>K</option>
+          </select>
+        </label>
+      </div>
+      <div id="newTxnDropFields" style="display:none;">
+        <label>Player <select id="newTxnDropPlayer" style="margin-left:.4rem;"></select></label>
+      </div>
+      <div style="display:flex; gap:.5rem;">
+        <button class="btn btn-primary small" id="submitTxnBtn">Log transaction</button>
+        <button class="btn small" id="cancelTxnBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  const teamSel = document.getElementById('newTxnTeam');
+  teamSel.innerHTML = data.owners.map(o=>`<option value="${o.id}">${o.team || o.name}</option>`).join('');
+
+  function refreshDropOptions(){
+    const ownerId = teamSel.value;
+    const roster = data.rosters[currentSeason]?.[ownerId] || [];
+    document.getElementById('newTxnDropPlayer').innerHTML = roster.map(p=>`<option value="${p.name}" data-pos="${p.pos}">${p.name} (${p.pos})</option>`).join('') || '<option value="">No players on this roster</option>';
+  }
+  refreshDropOptions();
+  teamSel.addEventListener('change', refreshDropOptions);
+
+  document.getElementById('newTxnAction').addEventListener('change', (e)=>{
+    document.getElementById('newTxnAddFields').style.display = e.target.value === 'add' ? 'block' : 'none';
+    document.getElementById('newTxnDropFields').style.display = e.target.value === 'drop' ? 'block' : 'none';
+  });
+
+  document.getElementById('submitTxnBtn').addEventListener('click', ()=>{
+    const action = document.getElementById('newTxnAction').value;
+    const week = Number(document.getElementById('newTxnWeek').value) || 1;
+    const ownerId = teamSel.value;
+    let playerName, playerPos;
+    if(action === 'add'){
+      playerName = document.getElementById('newTxnPlayerName').value.trim();
+      playerPos = document.getElementById('newTxnPlayerPos').value;
+      if(!playerName){ toast('Enter a player name'); return; }
+    } else {
+      const dropSel = document.getElementById('newTxnDropPlayer');
+      playerName = dropSel.value;
+      playerPos = dropSel.selectedOptions[0]?.dataset.pos || '';
+      if(!playerName){ toast('No player selected'); return; }
+    }
+    addTransaction(currentSeason, week, ownerId, action, playerName, playerPos);
+    saveData();
+    box.style.display = 'none';
+    renderTxnList();
+    renderRosters();
+    renderStats();
+  });
+  document.getElementById('cancelTxnBtn').addEventListener('click', ()=>{ box.style.display = 'none'; });
+}
+
+document.getElementById('addTxnBtn').addEventListener('click', ()=>{
+  document.getElementById('addTxnForm').style.display = 'block';
+  renderAddTxnForm();
+});
+
+function computeSeasonStats(year){
+  const result = {};
+  const games = data.schedule[year] || [];
+  games.forEach(g=>{
+    Object.keys(g.stats || {}).forEach(ownerId=>{
+      const playerMap = g.stats[ownerId] || {};
+      Object.keys(playerMap).forEach(pKey=>{
+        const entry = playerMap[pKey];
+        if(!entry) return;
+        if(!result[pKey]) result[pKey] = { name: entry.name, pos: entry.pos, raw: {}, points: 0, games: 0 };
+        const acc = result[pKey];
+        acc.pos = entry.pos;
+        Object.keys(entry.raw || {}).forEach(k=>{
+          acc.raw[k] = (acc.raw[k] || 0) + (Number(entry.raw[k]) || 0);
+        });
+        acc.points += Number(entry.points) || 0;
+        acc.games += 1;
+      });
+    });
+  });
+  // Fold in manual baselines (full data, merged by player name regardless of team)
+  const baselinesByYear = data.statBaselines[year] || {};
+  Object.keys(baselinesByYear).forEach(ownerId=>{
+    Object.keys(baselinesByYear[ownerId] || {}).forEach(pKey=>{
+      const b = baselinesByYear[ownerId][pKey];
+      if(!b) return;
+      if(!result[pKey]) result[pKey] = { name: b.name, pos: b.pos, raw: {}, points: 0, games: 0 };
+      const acc = result[pKey];
+      Object.keys(b.raw || {}).forEach(k=>{
+        acc.raw[k] = (acc.raw[k] || 0) + (Number(b.raw[k]) || 0);
+      });
+      acc.points += Number(b.points) || 0;
+      acc.games += Number(b.gp) || 0;
+    });
+  });
+  return result;
+}
+
+function getPlayerStat(year, name){
+  const computed = computeSeasonStats(year);
+  return computed[statKey(name)] || null;
+}
+
+function playerStatLine(p){
+  const stat = getPlayerStat(currentSeason, p.name);
+  if(stat && stat.games > 0){
+    const ppg = (stat.points / stat.games).toFixed(1);
+    return `${p.name} (${p.pos}, ${stat.points} pts over ${stat.games} games this season, ${ppg} ppg)`;
+  }
+  return `${p.name} (${p.pos}, no season stats logged yet)`;
+}
+
+let statsCategory = 'passing';
+let statsSortCol = 'points';
+let statsSortDir = 'desc';
+
+document.getElementById('statsCategorySelect').addEventListener('change', (e)=>{
+  statsCategory = e.target.value;
+  statsSortCol = 'points';
+  statsSortDir = 'desc';
+  renderStats();
+});
+
+function computeOfficialSeasonStatsByTeam(year){
+  const byTeam = {};
+  const games = data.schedule[year] || [];
+  games.forEach(g=>{
+    Object.keys(g.stats || {}).forEach(ownerId=>{
+      const playerMap = g.stats[ownerId] || {};
+      Object.keys(playerMap).forEach(pKey=>{
+        const entry = playerMap[pKey];
+        if(!entry) return;
+        const teamKey = pKey + '::' + ownerId;
+        if(!byTeam[teamKey]) byTeam[teamKey] = { name: entry.name, pos: entry.pos, ownerId, raw:{}, points:0, gp:0, gs:0 };
+        const acc = byTeam[teamKey];
+        acc.pos = entry.pos;
+        acc.gp += 1;
+        if(entry.started){
+          acc.gs += 1;
+          Object.keys(entry.raw || {}).forEach(k=>{ acc.raw[k] = (acc.raw[k] || 0) + (Number(entry.raw[k]) || 0); });
+          acc.points += Number(entry.points) || 0;
+        }
+      });
+    });
+  });
+  const baselinesByYear = data.statBaselines[year] || {};
+  Object.keys(baselinesByYear).forEach(ownerId=>{
+    Object.keys(baselinesByYear[ownerId] || {}).forEach(pKey=>{
+      const b = baselinesByYear[ownerId][pKey];
+      if(!b) return;
+      const teamKey = pKey + '::' + ownerId;
+      if(!byTeam[teamKey]) byTeam[teamKey] = { name: b.name, pos: b.pos, ownerId, raw:{}, points:0, gp:0, gs:0 };
+      const acc = byTeam[teamKey];
+      Object.keys(b.raw || {}).forEach(k=>{ acc.raw[k] = (acc.raw[k] || 0) + (Number(b.raw[k]) || 0); });
+      acc.points += Number(b.points) || 0;
+      acc.gp += Number(b.gp) || 0;
+      acc.gs += Number(b.gs) || 0;
+    });
+  });
+
+  const combined = {};
+  Object.keys(byTeam).forEach(teamKey=>{
+    const row = byTeam[teamKey];
+    const pKey = teamKey.split('::')[0];
+    if(!combined[pKey]) combined[pKey] = { name: row.name, pos: row.pos, raw:{}, points:0, gp:0, gs:0, teamKeys: [] };
+    const c = combined[pKey];
+    c.teamKeys.push(teamKey);
+    Object.keys(row.raw).forEach(k=>{ c.raw[k] = (c.raw[k] || 0) + row.raw[k]; });
+    c.points += row.points;
+    c.gp += row.gp;
+    c.gs += row.gs;
+  });
+
+  return { byTeam, combined };
+}
+
+function renderStats(){
+  document.getElementById('statsSeasonLabel').textContent = currentSeason;
+  const cat = STAT_CATEGORIES[statsCategory];
+  const head = document.getElementById('statsTableHead');
+  const body = document.getElementById('statsTableBody');
+
+  if(data.owners.length === 0){
+    head.innerHTML = '';
+    body.innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams and rosters first.</td></tr>`;
+    return;
+  }
+
+  const { byTeam, combined } = computeOfficialSeasonStatsByTeam(currentSeason);
+
+  let rows = Object.keys(combined).map(pKey=>{
+    const c = combined[pKey];
+    if(!cat.positions.includes(normalizePos(c.pos))) return null;
+    const row = { pKey, name: c.name, pos: c.pos, teamCount: c.teamKeys.length, teamKeys: c.teamKeys, gp: c.gp, gs: c.gs, points: c.points };
+    cat.cols.forEach(col=>{ row[col.k] = c.raw[col.k] || 0; });
+    return row;
+  }).filter(Boolean);
+
+  rows.sort((a,b)=>{
+    const dir = statsSortDir === 'asc' ? 1 : -1;
+    const av = a[statsSortCol], bv = b[statsSortCol];
+    if(typeof av === 'string') return av.localeCompare(bv) * dir;
+    return (av - bv) * dir;
+  });
+
+  const headCols = [
+    { k:'name', l:'Player' }, { k:'gp', l:'GP' }, { k:'gs', l:'GS' },
+    ...cat.cols.map(c=>({ k:c.k, l:c.l })),
+    { k:'points', l:'FPTS' }
+  ];
+  head.innerHTML = headCols.map(c=>`
+    <th class="${c.k === statsSortCol ? 'sorted' : ''}" data-sort="${c.k}">${c.l}${c.k === statsSortCol ? `<span class="sort-arrow">${statsSortDir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>
+  `).join('');
+
+  if(rows.length === 0){
+    body.innerHTML = `<tr><td colspan="${headCols.length}" style="color:var(--ink-soft); font-size:.85rem;">No ${cat.label.toLowerCase()} stats logged this season yet.</td></tr>`;
+  } else {
+    body.innerHTML = rows.map(r=>{
+      const mainRow = `
+        <tr>
+          <td>${r.teamCount > 1 ? `<button class="expand-toggle" data-expand="${r.pKey}">▸</button>` : ''}${r.name}${r.teamCount > 1 ? ` <span class="hint" style="display:inline;">(${r.teamCount} teams)</span>` : ''}</td>
+          <td class="num">${r.gp}</td>
+          <td class="num">${r.gs}</td>
+          ${cat.cols.map(c=>`<td class="num">${r[c.k]}</td>`).join('')}
+          <td class="num">${r.points.toFixed(1)}</td>
+        </tr>
+      `;
+      let splitRows = '';
+      if(r.teamCount > 1){
+        splitRows = r.teamKeys.map(tk=>{
+          const tr = byTeam[tk];
+          const owner = data.owners.find(o=>o.id === tr.ownerId);
+          return `
+            <tr class="split-row" data-parent="${r.pKey}" style="display:none;">
+              <td style="padding-left:1.6rem;">${owner ? (owner.team || owner.name) : 'Unknown team'}</td>
+              <td class="num">${tr.gp}</td>
+              <td class="num">${tr.gs}</td>
+              ${cat.cols.map(c=>`<td class="num">${tr.raw[c.k] || 0}</td>`).join('')}
+              <td class="num">${tr.points.toFixed(1)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+      return mainRow + splitRows;
+    }).join('');
+  }
+
+  head.querySelectorAll('th[data-sort]').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const col = th.dataset.sort;
+      if(statsSortCol === col){ statsSortDir = statsSortDir === 'asc' ? 'desc' : 'asc'; }
+      else { statsSortCol = col; statsSortDir = 'desc'; }
+      renderStats();
+    });
+  });
+
+  body.querySelectorAll('[data-expand]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const pKey = btn.dataset.expand;
+      const rowsToToggle = body.querySelectorAll(`[data-parent="${CSS.escape(pKey)}"]`);
+      const showing = rowsToToggle[0] && rowsToToggle[0].style.display !== 'none';
+      rowsToToggle.forEach(r=>{ r.style.display = showing ? 'none' : 'table-row'; });
+      btn.textContent = showing ? '▸' : '▾';
+    });
+  });
+}
+
+/* ---------- Standings ---------- */
+
+function computeStandings(year){
+  const table = {};
+  data.owners.forEach(o=>{ table[o.id] = { wins:0, losses:0, ties:0, pf:0, pa:0 }; });
+  const games = (data.schedule[year] || []).filter(isPlayed);
+  games.forEach(g=>{
+    if(!table[g.homeId] || !table[g.awayId]) return;
+    table[g.homeId].pf += g.homeScore; table[g.homeId].pa += g.awayScore;
+    table[g.awayId].pf += g.awayScore; table[g.awayId].pa += g.homeScore;
+    if(g.homeScore > g.awayScore){ table[g.homeId].wins++; table[g.awayId].losses++; }
+    else if(g.homeScore < g.awayScore){ table[g.awayId].wins++; table[g.homeId].losses++; }
+    else { table[g.homeId].ties++; table[g.awayId].ties++; }
+  });
+  return table;
+}
+
+function tiebreakGroup(group, games, table){
+  if(group.length <= 1) return group;
+  const h2h = {};
+  group.forEach(id=>{ h2h[id] = { w:0, l:0, t:0 }; });
+  games.forEach(g=>{
+    if(group.includes(g.homeId) && group.includes(g.awayId)){
+      if(g.homeScore > g.awayScore){ h2h[g.homeId].w++; h2h[g.awayId].l++; }
+      else if(g.homeScore < g.awayScore){ h2h[g.awayId].w++; h2h[g.homeId].l++; }
+      else { h2h[g.homeId].t++; h2h[g.awayId].t++; }
+    }
+  });
+  return [...group].sort((a,b)=>{
+    const aGP = h2h[a].w + h2h[a].l + h2h[a].t, bGP = h2h[b].w + h2h[b].l + h2h[b].t;
+    const aPct = aGP > 0 ? (h2h[a].w + 0.5*h2h[a].t) / aGP : null;
+    const bPct = bGP > 0 ? (h2h[b].w + 0.5*h2h[b].t) / bGP : null;
+    if(aPct !== null && bPct !== null && aPct !== bPct) return bPct - aPct;
+    if(table[a].pf !== table[b].pf) return table[b].pf - table[a].pf;
+    const diffA = table[a].pf - table[a].pa, diffB = table[b].pf - table[b].pa;
+    if(diffA !== diffB) return diffB - diffA;
+    return 0;
+  });
+}
+
+function orderedStandings(year){
+  const table = computeStandings(year);
+  const games = (data.schedule[year] || []).filter(isPlayed);
+  const groups = {};
+  data.owners.forEach(o=>{
+    const rec = table[o.id];
+    const gp = rec.wins + rec.losses + rec.ties;
+    const pct = gp > 0 ? (rec.wins + 0.5*rec.ties) / gp : 0;
+    const key = pct.toFixed(4);
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(o.id);
+  });
+  const orderedIds = Object.keys(groups)
+    .sort((a,b)=> Number(b) - Number(a))
+    .flatMap(k=> tiebreakGroup(groups[k], games, table));
+  return orderedIds.map(id=>({ owner: data.owners.find(o=>o.id === id), rec: table[id] }));
+}
+
+function renderSeasonStandings(){
+  document.getElementById('standingsSeasonLabel').textContent = currentSeason;
+  const head = document.getElementById('standingsSeasonHead');
+  const body = document.getElementById('standingsSeasonBody');
+
+  if(data.owners.length === 0){
+    head.innerHTML = '';
+    body.innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
+    return;
+  }
+
+  const rows = orderedStandings(currentSeason);
+  const anyTies = rows.some(r=> r.rec.ties > 0);
+  const anyPlayed = (data.schedule[currentSeason] || []).some(isPlayed);
+
+  head.innerHTML = `
+    <th>#</th><th>Owner</th><th>Team</th><th class="num">W</th><th class="num">L</th>
+    ${anyTies ? '<th class="num">T</th>' : ''}
+    <th class="num">PF</th><th class="num">PA</th><th class="num">DIFF</th>
+  `;
+
+  let html = '';
+  rows.forEach((r, i)=>{
+    if(anyPlayed && i === 8){
+      html += `<tr class="playoff-divider"><td colspan="${anyTies ? 8 : 7}">Playoff line — top 8</td></tr>`;
+    }
+    const diff = r.rec.pf - r.rec.pa;
+    html += `
+      <tr>
+        <td>${i+1}</td>
+        <td>${r.owner.name}</td>
+        <td>${r.owner.team}</td>
+        <td class="num">${r.rec.wins}</td>
+        <td class="num">${r.rec.losses}</td>
+        ${anyTies ? `<td class="num">${r.rec.ties}</td>` : ''}
+        <td class="num">${r.rec.pf.toFixed(1)}</td>
+        <td class="num">${r.rec.pa.toFixed(1)}</td>
+        <td class="num">${diff > 0 ? '+' : ''}${diff.toFixed(1)}</td>
+      </tr>
+    `;
+  });
+  body.innerHTML = html;
+}
+
+/* ---------- Schedule ---------- */
+
+function renderScheduleFilterOptions(){
+  const teamSel = document.getElementById('scheduleTeamFilter');
+  const weekSel = document.getElementById('scheduleWeekFilter');
+  teamSel.innerHTML = data.owners.map(o=>`<option value="${o.id}">${o.team || o.name}</option>`).join('');
+  weekSel.innerHTML = DIGEST_WEEKS.map(w=>`<option value="${w}">Week ${w}</option>`).join('');
+}
+
+function getFilteredGames(){
+  ensureScheduleSeason(currentSeason);
+  const games = [...data.schedule[currentSeason]];
+  const filterType = document.getElementById('scheduleFilterType').value;
+  if(filterType === 'team'){
+    const teamId = document.getElementById('scheduleTeamFilter').value;
+    return games.filter(g=> g.homeId === teamId || g.awayId === teamId);
+  }
+  if(filterType === 'week'){
+    const week = Number(document.getElementById('scheduleWeekFilter').value);
+    return games.filter(g=> g.week === week);
+  }
+  return games;
+}
+
+function teamLabel(id){
+  const o = data.owners.find(o=>o.id === id);
+  return o ? (o.team || o.name) : 'Unknown team';
+}
+
+function renderScheduleList(){
+  document.getElementById('scheduleSeasonLabel').textContent = currentSeason;
+  document.getElementById('addGameRow').style.display = editMode ? 'flex' : 'none';
+  ensureScheduleSeason(currentSeason);
+
+  const filterType = document.getElementById('scheduleFilterType').value;
+  document.getElementById('scheduleTeamFilter').style.display = filterType === 'team' ? 'inline-block' : 'none';
+  document.getElementById('scheduleWeekFilter').style.display = filterType === 'week' ? 'inline-block' : 'none';
+
+  const listRoot = document.getElementById('scheduleList');
+  if(data.owners.length < 2){
+    listRoot.innerHTML = `<div class="empty">Add at least two teams in the Rosters tab first.</div>`;
+    return;
+  }
+  const games = getFilteredGames().sort((a,b)=> a.week - b.week);
+  if(games.length === 0){
+    listRoot.innerHTML = `<div class="empty">No games yet.${editMode ? ' Click "+ Add game" below.' : ''}</div>`;
+    return;
+  }
+
+  const byWeek = {};
+  games.forEach(g=>{ (byWeek[g.week] = byWeek[g.week] || []).push(g); });
+
+  listRoot.innerHTML = Object.keys(byWeek).sort((a,b)=>a-b).map(week=>`
+    <div class="schedule-week-group">
+      <h4>Week ${week}</h4>
+      ${byWeek[week].map(g=>`
+        <div class="game-row" data-game="${g.id}">
+          <span>${teamLabel(g.homeId)} <span class="score">${isPlayed(g) ? g.homeScore : ''}</span> vs <span class="score">${isPlayed(g) ? g.awayScore : ''}</span> ${teamLabel(g.awayId)}</span>
+          <span class="status">${isPlayed(g) ? 'Final' : 'Not played'}${g.locked ? ' 🔒' : ''}</span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  listRoot.querySelectorAll('.game-row').forEach(row=>{
+    row.addEventListener('click', ()=> openGame(row.dataset.game));
+  });
+}
+
+function renderAddGameForm(){
+  const box = document.getElementById('addGameForm');
+  const nextWeek = ((data.schedule[currentSeason] || []).reduce((m,g)=>Math.max(m,g.week), 0)) + 1 || 1;
+  box.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:.6rem; font-size:.85rem;">
+      <label>Week <input type="number" id="newGameWeek" value="${nextWeek}" min="1" max="18" style="width:70px; margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
+      <label>Home team <select id="newGameHome" style="margin-left:.4rem;"></select></label>
+      <label>Away team <select id="newGameAway" style="margin-left:.4rem;"></select></label>
+      <div style="display:flex; gap:.5rem;">
+        <button class="btn btn-primary small" id="submitGameBtn">Add game</button>
+        <button class="btn small" id="cancelGameBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  const homeSel = document.getElementById('newGameHome');
+  const awaySel = document.getElementById('newGameAway');
+  data.owners.forEach(o=>{
+    homeSel.innerHTML += `<option value="${o.id}">${o.team || o.name}</option>`;
+    awaySel.innerHTML += `<option value="${o.id}">${o.team || o.name}</option>`;
+  });
+  if(data.owners.length > 1) awaySel.selectedIndex = 1;
+
+  document.getElementById('submitGameBtn').addEventListener('click', ()=>{
+    const week = Number(document.getElementById('newGameWeek').value) || 1;
+    const homeId = homeSel.value, awayId = awaySel.value;
+    if(homeId === awayId){ toast('Pick two different teams'); return; }
+    ensureScheduleSeason(currentSeason);
+    data.schedule[currentSeason].push(blankGame(week, homeId, awayId));
+    saveData();
+    box.style.display = 'none';
+    renderScheduleList();
+  });
+  document.getElementById('cancelGameBtn').addEventListener('click', ()=>{ box.style.display = 'none'; });
+}
+
+document.getElementById('scheduleFilterType').addEventListener('change', renderScheduleList);
+document.getElementById('scheduleTeamFilter').addEventListener('change', renderScheduleList);
+document.getElementById('scheduleWeekFilter').addEventListener('change', renderScheduleList);
+document.getElementById('addGameBtn').addEventListener('click', ()=>{
+  const box = document.getElementById('addGameForm');
+  box.style.display = 'block';
+  renderAddGameForm();
+});
+
+function openGame(gameId){
+  currentGameId = gameId;
+  document.getElementById('scheduleListView').style.display = 'none';
+  document.getElementById('scheduleDetailView').style.display = 'block';
+  renderGameDetail();
+}
+
+document.getElementById('backToScheduleBtn').addEventListener('click', ()=>{
+  currentGameId = null;
+  document.getElementById('scheduleDetailView').style.display = 'none';
+  document.getElementById('scheduleListView').style.display = 'block';
+  renderScheduleList();
+});
+
+function findGame(gameId){
+  return (data.schedule[currentSeason] || []).find(g=>g.id === gameId);
+}
+
+function renderGameDetail(){
+  const game = findGame(currentGameId);
+  const root = document.getElementById('gameDetailRoot');
+  if(!game){ root.innerHTML = `<div class="empty">Game not found.</div>`; return; }
+
+  const homeOwner = data.owners.find(o=>o.id === game.homeId);
+  const awayOwner = data.owners.find(o=>o.id === game.awayId);
+  const homeRoster = computeRosterAsOfWeek(currentSeason, game.homeId, game.week);
+  const awayRoster = computeRosterAsOfWeek(currentSeason, game.awayId, game.week);
+  const canEdit = editMode && !game.locked;
+
+  function playerBlock(ownerId, p){
+    const normPos = normalizePos(p.pos);
+    const fields = POSITION_FIELDS[normPos] || [];
+    const entry = (game.stats[ownerId] || {})[statKey(p.name)] || { raw:{}, points:0, started:true };
+    const started = entry.started !== false;
+    const fieldInputs = fields.map(f=>`
+      <label class="stat-field">
+        <span>${f.l}</span>
+        <input type="number" step="any" class="stat-input" data-owner="${ownerId}" data-name="${p.name}" data-pos="${p.pos}" data-key="${f.k}"
+          value="${entry.raw && entry.raw[f.k] !== undefined ? entry.raw[f.k] : ''}" ${canEdit ? '' : 'disabled'}>
+      </label>
+    `).join('');
+    return `
+      <div class="player-stat-block" data-block-owner="${ownerId}" data-block-name="${p.name}">
+        <div class="player-stat-head">
+          <span>${p.name} <span class="pos-tag">${p.pos}</span></span>
+          <span class="player-pts">${(entry.points || 0).toFixed(1)} pts</span>
+        </div>
+        ${editMode ? `
+          <label class="started-toggle">
+            <input type="checkbox" class="started-input" data-owner="${ownerId}" data-name="${p.name}" data-pos="${p.pos}" ${started ? 'checked' : ''} ${canEdit ? '' : 'disabled'}>
+            Started this week (unchecked = bench: only GP counts toward official stats)
+          </label>
+        ` : ''}
+        ${editMode
+          ? (fields.length ? `<div class="stat-field-grid">${fieldInputs}</div>` : `<p class="hint" style="margin:0;">No tracked stat categories for this position.</p>`)
+          : ''}
+      </div>
+    `;
+  }
+
+  root.innerHTML = `
+    <div class="game-detail-header">
+      <div class="hint">Week ${game.week} ${game.locked ? '<span class="lock-badge">Locked</span>' : ''}</div>
+      <div class="game-detail-score">
+        <span>${homeOwner ? (homeOwner.team || homeOwner.name) : 'Home'}</span>
+        ${canEdit
+          ? `<input type="number" id="homeScoreInput" value="${game.homeScore ?? ''}">`
+          : `<span>${game.homeScore ?? '—'}</span>`}
+        <span>–</span>
+        ${canEdit
+          ? `<input type="number" id="awayScoreInput" value="${game.awayScore ?? ''}">`
+          : `<span>${game.awayScore ?? '—'}</span>`}
+        <span>${awayOwner ? (awayOwner.team || awayOwner.name) : 'Away'}</span>
+      </div>
+      ${editMode ? `
+        <div style="display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap;">
+          ${game.locked
+            ? `<button class="btn small" id="unlockGameBtn">Unlock to edit</button>`
+            : `<button class="btn btn-primary small" id="lockGameBtn">Submit &amp; lock week</button>`}
+          <button class="btn-danger btn small" id="removeGameBtn">Remove game</button>
+        </div>
+      ` : ''}
+    </div>
+    <div class="game-detail-grid">
+      <div class="card" style="padding:.6rem .9rem;">
+        ${homeRoster.map(p=>playerBlock(game.homeId, p)).join('') || '<p class="hint">No roster for this team as of this week</p>'}
+      </div>
+      <div class="card" style="padding:.6rem .9rem;">
+        ${awayRoster.map(p=>playerBlock(game.awayId, p)).join('') || '<p class="hint">No roster for this team as of this week</p>'}
+      </div>
+    </div>
+  `;
+
+  if(canEdit){
+    document.getElementById('homeScoreInput').addEventListener('blur', (e)=>{
+      const v = e.target.value === '' ? null : Number(e.target.value);
+      game.homeScore = v; saveData();
+    });
+    document.getElementById('awayScoreInput').addEventListener('blur', (e)=>{
+      const v = e.target.value === '' ? null : Number(e.target.value);
+      game.awayScore = v; saveData();
+    });
+
+    function recomputeEntry(ownerId, name, pos){
+      const normPos = normalizePos(pos);
+      const fields = POSITION_FIELDS[normPos] || [];
+      const raw = {};
+      fields.forEach(f=>{
+        const fieldInput = root.querySelector(`.stat-input[data-owner="${CSS.escape(ownerId)}"][data-name="${CSS.escape(name)}"][data-key="${CSS.escape(f.k)}"]`);
+        if(fieldInput && fieldInput.value !== ''){ raw[f.k] = Number(fieldInput.value); }
+      });
+      const startedInput = root.querySelector(`.started-input[data-owner="${CSS.escape(ownerId)}"][data-name="${CSS.escape(name)}"]`);
+      const started = startedInput ? startedInput.checked : true;
+      if(!game.stats[ownerId]) game.stats[ownerId] = {};
+      if(Object.keys(raw).length === 0){
+        delete game.stats[ownerId][statKey(name)];
+      } else {
+        const points = computeFantasyPoints(normPos, raw);
+        game.stats[ownerId][statKey(name)] = { name, pos, started, raw, points };
+      }
+      saveData();
+      const block = root.querySelector(`.player-stat-block[data-block-owner="${CSS.escape(ownerId)}"][data-block-name="${CSS.escape(name)}"]`);
+      const ptsEl = block ? block.querySelector('.player-pts') : null;
+      if(ptsEl){
+        const updated = (game.stats[ownerId][statKey(name)] || { points: 0 }).points;
+        ptsEl.textContent = `${updated.toFixed(1)} pts`;
+      }
+    }
+
+    root.querySelectorAll('.stat-input').forEach(input=>{
+      input.addEventListener('blur', ()=> recomputeEntry(input.dataset.owner, input.dataset.name, input.dataset.pos));
+    });
+    root.querySelectorAll('.started-input').forEach(input=>{
+      input.addEventListener('change', ()=> recomputeEntry(input.dataset.owner, input.dataset.name, input.dataset.pos));
+    });
+
+    const lockBtn = document.getElementById('lockGameBtn');
+    if(lockBtn){
+      lockBtn.addEventListener('click', ()=>{
+        game.locked = true;
+        saveData();
+        renderGameDetail();
+        renderStats();
+        toast('Week locked');
+      });
+    }
+
+    const removeBtn = document.getElementById('removeGameBtn');
+    if(removeBtn){
+      removeBtn.addEventListener('click', ()=>{
+        if(!confirm('Remove this game?')) return;
+        data.schedule[currentSeason] = data.schedule[currentSeason].filter(g=>g.id !== game.id);
+        saveData();
+        document.getElementById('backToScheduleBtn').click();
+      });
+    }
+  }
+
+  if(editMode && game.locked){
+    const unlockBtn = document.getElementById('unlockGameBtn');
+    if(unlockBtn){
+      unlockBtn.addEventListener('click', ()=>{
+        game.locked = false;
+        saveData();
+        renderGameDetail();
+      });
+    }
+    const removeBtn = document.getElementById('removeGameBtn');
+    if(removeBtn){
+      removeBtn.addEventListener('click', ()=>{
+        if(!confirm('Remove this game?')) return;
+        data.schedule[currentSeason] = data.schedule[currentSeason].filter(g=>g.id !== game.id);
+        saveData();
+        document.getElementById('backToScheduleBtn').click();
+      });
+    }
+  }
+}
+
+/* ---------- Trade Simulator ---------- */
+
+let tradeSelections = { A: new Set(), B: new Set() };
+
+function renderTradeTeamSelects(){
+  const aSel = document.getElementById('tradeTeamA');
+  const bSel = document.getElementById('tradeTeamB');
+  const prevA = aSel.value, prevB = bSel.value;
+  [aSel, bSel].forEach(sel=>{
+    sel.innerHTML = '';
+    data.owners.forEach(o=>{
+      const opt = document.createElement('option');
+      opt.value = o.id; opt.textContent = o.team || o.name;
+      sel.appendChild(opt);
+    });
+  });
+  if(data.owners.some(o=>o.id === prevA)) aSel.value = prevA;
+  if(data.owners.some(o=>o.id === prevB)) bSel.value = prevB;
+  if(aSel.value === bSel.value && data.owners.length > 1){
+    bSel.selectedIndex = (aSel.selectedIndex + 1) % data.owners.length;
+  }
+  document.getElementById('tradeSeasonLabel').textContent = currentSeason;
+}
+
+function renderTradeBuilder(){
+  const builder = document.getElementById('tradeBuilder');
+  document.getElementById('tradeSeasonLabel').textContent = currentSeason;
+  if(data.owners.length < 2){
+    builder.innerHTML = `<div class="empty">Add at least two teams in the Rosters tab first.</div>`;
+    return;
+  }
+  ensureSeasonRosters(currentSeason);
+  const aId = document.getElementById('tradeTeamA').value;
+  const bId = document.getElementById('tradeTeamB').value;
+  const teamA = data.owners.find(o=>o.id === aId);
+  const teamB = data.owners.find(o=>o.id === bId);
+  const rosterA = data.rosters[currentSeason][aId] || [];
+  const rosterB = data.rosters[currentSeason][bId] || [];
+
+  function colHTML(team, roster, side){
+    const rows = roster.map((p,i)=>`
+      <label class="trade-player-row">
+        <input type="checkbox" data-side="${side}" data-idx="${i}" ${tradeSelections[side].has(i)?'checked':''}>
+        <span>${playerStatLine(p)}</span>
+      </label>
+    `).join('');
+    return `<div class="trade-col"><h4>${team ? (team.team || team.name) : 'Team'} sends</h4>${rows || '<div class="hint">No players on this roster yet.</div>'}</div>`;
+  }
+
+  builder.innerHTML = colHTML(teamA, rosterA, 'A') + colHTML(teamB, rosterB, 'B');
+  builder.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const set = tradeSelections[cb.dataset.side];
+      const idx = Number(cb.dataset.idx);
+      if(cb.checked) set.add(idx); else set.delete(idx);
+    });
+  });
+}
+
+async function callClaude(systemPrompt, userPrompt){
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  });
+  const json = await response.json();
+  return (json.content || []).filter(b=>b.type === 'text').map(b=>b.text).join('\n');
+}
+
+function parseJSONLoose(text){
+  const cleaned = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(cleaned);
+}
+
+document.getElementById('tradeTeamA').addEventListener('change', ()=>{
+  tradeSelections = { A:new Set(), B:new Set() };
+  document.getElementById('tradeResult').innerHTML = '';
+  renderTradeBuilder();
+});
+document.getElementById('tradeTeamB').addEventListener('change', ()=>{
+  tradeSelections = { A:new Set(), B:new Set() };
+  document.getElementById('tradeResult').innerHTML = '';
+  renderTradeBuilder();
+});
+
+document.getElementById('assessTradeBtn').addEventListener('click', async ()=>{
+  const aId = document.getElementById('tradeTeamA').value;
+  const bId = document.getElementById('tradeTeamB').value;
+  if(aId === bId){ toast('Pick two different teams'); return; }
+  const teamA = data.owners.find(o=>o.id === aId);
+  const teamB = data.owners.find(o=>o.id === bId);
+  const rosterA = data.rosters[currentSeason][aId] || [];
+  const rosterB = data.rosters[currentSeason][bId] || [];
+  const sendA = [...tradeSelections.A].map(i=>rosterA[i]).filter(Boolean);
+  const sendB = [...tradeSelections.B].map(i=>rosterB[i]).filter(Boolean);
+  if(sendA.length === 0 && sendB.length === 0){ toast('Select at least one player on a side'); return; }
+
+  const resultBox = document.getElementById('tradeResult');
+  resultBox.innerHTML = `<p class="loading-text">Asking AI to weigh in on this trade...</p>`;
+
+  const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
+  const prompt = `You are a sharp, concise fantasy football trade analyst.
+Team "${nameA}" full roster: ${rosterA.map(playerStatLine).join(', ') || 'unknown'}.
+Team "${nameB}" full roster: ${rosterB.map(playerStatLine).join(', ') || 'unknown'}.
+
+Proposed trade:
+${nameA} sends: ${sendA.map(playerStatLine).join(', ') || 'nothing'}
+${nameB} sends: ${sendB.map(playerStatLine).join(', ') || 'nothing'}
+
+Base your reasoning only on the season stats given above (points, games, points per game) plus your general knowledge of these players' roles. You have no visibility into future weeks, upcoming matchups, injuries, or emerging trends beyond what's stated — do not present projections as certain, and say so plainly if a stat is missing rather than guessing a number.
+
+Respond with ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
+{"verdict":"short label such as Good for ${nameA}, Good for ${nameB}, Good for both, Fair trade, or Bad for both","summary":"1-2 sentence overall take","forTeamA":"1-2 sentences on how this affects ${nameA}","forTeamB":"1-2 sentences on how this affects ${nameB}"}`;
+
+  try{
+    const text = await callClaude('You are a fantasy football trade analyst working only from season-to-date stats the user provides. You have no knowledge of future performance, trends, or upcoming matchups — never imply otherwise. Always respond with strict JSON only, no other text.', prompt);
+    const parsed = parseJSONLoose(text);
+    resultBox.innerHTML = `
+      <div class="verdict-card">
+        <span class="verdict-badge">${parsed.verdict}</span>
+        <p>${parsed.summary}</p>
+        <p><strong>${nameA}:</strong> ${parsed.forTeamA}</p>
+        <p><strong>${nameB}:</strong> ${parsed.forTeamB}</p>
+      </div>
+      <p class="hint">AI opinion based on the rosters as entered here — not live stats.</p>
+    `;
+  }catch(e){
+    resultBox.innerHTML = `<p class="hint">Couldn't get an assessment right now — try again in a moment.</p>`;
+  }
+});
+
+document.getElementById('suggestTradesBtn').addEventListener('click', async ()=>{
+  const aId = document.getElementById('tradeTeamA').value;
+  const bId = document.getElementById('tradeTeamB').value;
+  if(aId === bId){ toast('Pick two different teams'); return; }
+  const teamA = data.owners.find(o=>o.id === aId);
+  const teamB = data.owners.find(o=>o.id === bId);
+  const rosterA = data.rosters[currentSeason][aId] || [];
+  const rosterB = data.rosters[currentSeason][bId] || [];
+  if(rosterA.length === 0 || rosterB.length === 0){ toast('Both rosters need players entered first'); return; }
+
+  const resultBox = document.getElementById('tradeResult');
+  resultBox.innerHTML = `<p class="loading-text">Looking for trades that fit both rosters...</p>`;
+
+  const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
+  const prompt = `You are a fantasy football trade advisor.
+Team "${nameA}" roster: ${rosterA.map(playerStatLine).join(', ')}.
+Team "${nameB}" roster: ${rosterB.map(playerStatLine).join(', ')}.
+
+Look at positional depth and season-to-date production for each team (for example, a team with five productive WRs and one low-output TE likely has WR surplus and TE need). Propose up to 3 realistic, mutually-beneficial trade packages between these two specific teams.
+
+You only know what's shown above — season stats to date and general player knowledge. You cannot see future weeks, schedule strength, or emerging trends, so don't frame suggestions as guaranteed wins, just as reasonable fits today.
+
+Respond with ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
+{"trades":[{"aSends":["Player Name"],"bSends":["Player Name"],"rationale":"1-2 sentences on why this fits both teams' needs"}]}`;
+
+  try{
+    const text = await callClaude('You are a fantasy football trade advisor working only from season-to-date stats the user provides. You have no knowledge of future performance, trends, or upcoming matchups — never imply otherwise. Always respond with strict JSON only, no other text.', prompt);
+    const parsed = parseJSONLoose(text);
+    if(!parsed.trades || parsed.trades.length === 0){
+      resultBox.innerHTML = `<p class="hint">No clear trade fits found between these two rosters right now.</p>`;
+      return;
+    }
+    resultBox.innerHTML = parsed.trades.map(t=>`
+      <div class="suggestion-card">
+        <div class="suggestion-side"><strong>${nameA} sends:</strong> ${t.aSends.join(', ')}</div>
+        <div class="suggestion-side"><strong>${nameB} sends:</strong> ${t.bSends.join(', ')}</div>
+        <p class="hint" style="margin:.4rem 0 0;">${t.rationale}</p>
+      </div>
+    `).join('') + `<p class="hint">AI-generated suggestions based on roster composition — sanity check before proposing for real.</p>`;
+  }catch(e){
+    resultBox.innerHTML = `<p class="hint">Couldn't generate suggestions right now — try again in a moment.</p>`;
+  }
+});
+
+/* ---------- Nav & wiring ---------- */
+
+function setActiveTab(tabName, soonName){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-' + tabName).classList.add('active');
+  if(tabName === 'soon'){
+    document.getElementById('soonTitle').textContent = soonName || 'Coming soon';
+    document.getElementById('soonBody').textContent = `${soonName || 'This feature'} isn't built yet — it's next up on the SRFFL Hub roadmap.`;
+    document.querySelectorAll('.tab.soon').forEach(t=>{ if(t.dataset.name === soonName) t.classList.add('active'); });
+  } else {
+    document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+  }
+  document.getElementById('rosterToolbar').style.visibility = ['rosters','stats','schedule','standings','transactions'].includes(tabName) ? 'visible' : 'hidden';
+}
+
+document.getElementById('tabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.tab');
+  if(!btn) return;
+  setActiveTab(btn.dataset.tab, btn.dataset.name);
+  if(btn.dataset.tab === 'stats'){ renderStats(); }
+  if(btn.dataset.tab === 'standings'){ renderSeasonStandings(); }
+  if(btn.dataset.tab === 'transactions'){ renderTxnList(); }
+  if(btn.dataset.tab === 'schedule'){
+    document.getElementById('scheduleDetailView').style.display = 'none';
+    document.getElementById('scheduleListView').style.display = 'block';
+    renderScheduleFilterOptions();
+    renderScheduleList();
+  }
+  if(btn.dataset.tab === 'tradesim'){
+    renderTradeTeamSelects();
+    renderTradeBuilder();
+  }
+});
+
+document.getElementById('seasonSelect').addEventListener('change', (e)=>{
+  currentSeason = Number(e.target.value);
+  renderRosters();
+  renderStats();
+  renderSeasonStandings();
+  document.getElementById('scheduleDetailView').style.display = 'none';
+  document.getElementById('scheduleListView').style.display = 'block';
+  renderScheduleFilterOptions();
+  renderScheduleList();
+  renderTxnList();
+});
+
+document.getElementById('addSeasonBtn').addEventListener('click', ()=>{
+  const y = prompt('New season year:', String(new Date().getFullYear()+1));
+  if(!y || isNaN(Number(y))) return;
+  const year = Number(y);
+  if(!data.seasons.includes(year)) data.seasons.push(year);
+  data.rosters[year] = data.rosters[year] || {};
+  data.owners.forEach(o=>{ if(!data.rosters[year][o.id]) data.rosters[year][o.id] = []; });
+  currentSeason = year;
+  saveData();
+  renderSeasonSelect();
+  renderRosters();
+  renderStats();
+  renderSeasonStandings();
+  renderScheduleFilterOptions();
+  renderScheduleList();
+  renderTxnList();
+});
+
+document.getElementById('editToggle').addEventListener('click', ()=>{
+  if(!editMode){
+    if(data.pin){
+      const entered = prompt('Enter PIN to unlock editing:');
+      if(entered === null) return;
+      if(entered !== data.pin){ toast('Incorrect PIN'); return; }
+    } else {
+      const p1 = prompt('Set a PIN to lock editing (you\'ll need it next time):');
+      if(!p1) return;
+      const p2 = prompt('Confirm PIN:');
+      if(p1 !== p2){ toast('PINs did not match — try again'); return; }
+      data.pin = p1;
+      saveData();
+      toast('PIN set — remember it!');
+    }
+    editMode = true;
+  } else {
+    editMode = false;
+  }
+  const btn = document.getElementById('editToggle');
+  btn.textContent = 'Edit mode: ' + (editMode ? 'On' : 'Off');
+  btn.classList.toggle('btn-primary', editMode);
+  document.getElementById('changePinBtn').style.display = editMode ? 'inline-block' : 'none';
+  renderRosters();
+  renderRecords();
+  renderDigest();
+  renderStats();
+  renderSeasonStandings();
+  if(document.getElementById('scheduleDetailView').style.display === 'block'){
+    renderGameDetail();
+  } else {
+    renderScheduleList();
+  }
+  renderTxnList();
+});
+
+document.getElementById('changePinBtn').addEventListener('click', ()=>{
+  const current = prompt('Enter current PIN:');
+  if(current === null) return;
+  if(current !== data.pin){ toast('Incorrect PIN'); return; }
+  const p1 = prompt('Enter new PIN:');
+  if(!p1) return;
+  const p2 = prompt('Confirm new PIN:');
+  if(p1 !== p2){ toast('PINs did not match — try again'); return; }
+  data.pin = p1;
+  saveData();
+  toast('PIN updated');
+});
+
+document.getElementById('addRecordBtn').addEventListener('click', addRecord);
+
+(async function init(){
+  await loadData();
+  renderSeasonSelect();
+  renderRosters();
+  renderStats();
+  renderRecords();
+  renderDigestSelects();
+  renderDigest();
+  renderSeasonStandings();
+  renderScheduleFilterOptions();
+  renderScheduleList();
+  renderTxnList();
+})();
+</script>
+</body>
+</html>
