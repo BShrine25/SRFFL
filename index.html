@@ -12,7 +12,7 @@
 <meta name="color-scheme" content="light">
 <title>SRFFL Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Slab:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Slab:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme: light;
@@ -145,9 +145,19 @@
   .ledger-note{ font-size:.78rem; color:var(--ink-soft); margin-top:.15rem; }
   .ledger-del{ float:right; }
 
-  /* Digest */
+  /* Digest — flip book */
   .digest-toolbar{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1.1rem; }
   .digest-toolbar .current-flag{ font-size:.7rem; color:var(--field); background:var(--mustard); padding:.2rem .5rem; border-radius:3px; font-weight:700; letter-spacing:.03em; }
+
+  .digest-book{ perspective:1400px; max-width:640px; margin:0 auto; }
+  #digestPageInner{ transform-origin:left center; }
+  #digestPageInner.flip-out{ animation:digestFlipOut .22s ease forwards; }
+  #digestPageInner.flip-in{ animation:digestFlipIn .24s ease forwards; }
+  @keyframes digestFlipOut{ from{ transform:rotateY(0deg); opacity:1; } to{ transform:rotateY(-18deg); opacity:0; } }
+  @keyframes digestFlipIn{ from{ transform:rotateY(18deg); opacity:0; } to{ transform:rotateY(0deg); opacity:1; } }
+
+  .digest-page-nav{ display:flex; align-items:center; justify-content:center; gap:1rem; margin:1rem 0 1.8rem; }
+
   .cover-frame{
     width:100%; max-width:420px; margin:0 auto 1.4rem; aspect-ratio:3/4;
     background:var(--chalk-2); border:1px solid var(--line); border-radius:var(--radius);
@@ -155,7 +165,7 @@
   }
   .cover-frame.editable{ cursor:pointer; }
   .cover-frame.editable:hover{ border-color:var(--mustard); }
-  .cover-frame img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cover-frame img{ width:100%; height:100%; object-fit:contain; display:block; }
   .cover-empty{ color:var(--ink-soft); font-size:.85rem; text-align:center; padding:1rem; }
 
   .digest-article{ max-width:640px; margin:0 auto 1.6rem; }
@@ -164,6 +174,9 @@
   .digest-article .body-text:empty::before{ content:attr(data-placeholder); color:var(--ink-soft); font-style:italic; }
 
   .matchup-card{ max-width:640px; margin:0 auto 1.2rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.1rem; }
+  .matchup-card.gotw-card{ border:2px solid var(--mustard); background:linear-gradient(180deg,#fffdf6,#fff); }
+  .gotw-flag{ text-align:center; font-family:'Playfair Display',serif; font-style:italic; font-weight:700; color:var(--field); font-size:1.15rem; margin-bottom:.7rem; letter-spacing:.02em; }
+  .gotw-card .side-name{ font-family:'Playfair Display',serif; font-weight:700; font-style:italic; }
   .matchup-teams{ display:flex; align-items:center; justify-content:center; gap:.9rem; margin-bottom:.9rem; }
   .team-side{ flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; gap:.3rem; max-width:170px; }
   .side-logo{
@@ -191,6 +204,33 @@
   .matchup-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:.6rem; }
   .digest-add-row{ max-width:640px; margin:0 auto 1.6rem; display:flex; gap:.5rem; justify-content:center; }
 
+  /* Team preview page */
+  .team-page{ max-width:640px; margin:0 auto; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:1.1rem; }
+  .team-page-top{ display:flex; gap:1rem; align-items:flex-start; margin-bottom:1rem; }
+  .team-page-logo{
+    width:70px; height:70px; border-radius:8px; background:var(--chalk-2); border:1px dashed var(--line); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:.65rem; color:var(--ink-soft);
+  }
+  .team-page-logo.editable{ cursor:pointer; }
+  .team-page-logo img{ width:100%; height:100%; object-fit:cover; }
+  .team-page-fields{ flex:1; display:flex; flex-direction:column; gap:.4rem; }
+  .team-field-row{ font-size:.82rem; }
+  .team-field-row .field-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); display:block; }
+  .team-page h4{ font-size:.85rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.25rem; margin:1rem 0 .6rem; }
+  .key-player-row{ margin-bottom:.7rem; }
+  .key-player-row .kp-name{ font-family:'Anton',sans-serif; font-size:.9rem; display:block; margin-bottom:.15rem; }
+  .key-player-row .kp-summary{ font-size:.82rem; }
+  .synopsis-text{ font-size:.88rem; white-space:pre-wrap; min-height:3em; }
+
+  /* Bracket page */
+  .bracket-frame{
+    width:100%; max-width:420px; margin:0 auto 1rem; aspect-ratio:4/3;
+    background:var(--chalk-2); border:1px solid var(--line); border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  .bracket-frame.editable{ cursor:pointer; }
+  .bracket-frame img{ width:100%; height:100%; object-fit:contain; }
+
   .soon-box{ text-align:center; padding:3rem 1rem; }
   .soon-box h2{ font-size:1.4rem; color:var(--field); margin-bottom:.4rem; }
   .soon-box p{ color:var(--ink-soft); font-size:.9rem; max-width:420px; margin:0 auto; }
@@ -212,6 +252,22 @@
 
   /* Standings */
   .playoff-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:3px solid var(--mustard); border-bottom:3px solid var(--mustard); }
+
+  /* Playoff bracket (shared by Standings tab and Digest) */
+  .bracket-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.8rem; align-items:center; max-width:640px; margin:0 auto; }
+  @media (max-width:700px){ .bracket-grid{ grid-template-columns:1fr; } }
+  .bracket-col{ display:flex; flex-direction:column; gap:.8rem; }
+  .bracket-col-center{ align-items:stretch; justify-content:center; gap:.6rem; }
+  .bracket-matchup{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.55rem .7rem; }
+  .bracket-team-row{ display:flex; align-items:center; gap:.45rem; padding:.2rem 0; font-size:.82rem; }
+  .bracket-seed{ font-family:'Anton',sans-serif; font-size:.68rem; color:var(--ink-soft); width:14px; text-align:center; flex-shrink:0; }
+  .bracket-logo-img{ width:26px; height:26px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+  .bracket-logo-fallback{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Anton',sans-serif; font-size:.6rem; flex-shrink:0; }
+  .bracket-team-name{ flex:1; }
+  .bracket-vs{ text-align:center; font-size:.62rem; color:var(--ink-soft); padding:.15rem 0; text-transform:uppercase; letter-spacing:.04em; }
+  .bracket-tbd{ background:var(--chalk-2); border:1px dashed var(--line); border-radius:var(--radius); padding:.6rem; text-align:center; font-size:.72rem; color:var(--ink-soft); }
+  .bracket-champ{ background:var(--field); color:var(--mustard); border-radius:var(--radius); padding:.8rem; text-align:center; font-family:'Anton',sans-serif; font-size:1rem; letter-spacing:.03em; }
+  .bracket-pred-select{ width:100%; font-family:'Roboto Slab',serif; font-size:.8rem; padding:.25rem .3rem; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); }
 
   /* Transactions */
   .txn-row{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; font-size:.86rem; }
@@ -356,6 +412,8 @@
         <tbody id="standingsSeasonBody"></tbody>
       </table>
     </div>
+    <h2 class="section-title" style="margin-top:1.4rem;">Playoff Picture</h2>
+    <div id="standingsBracket"></div>
   </section>
 
   <section class="panel" id="panel-stats">
@@ -409,22 +467,14 @@
       <button class="btn small" id="setCurrentBtn" style="display:none;">Set as current</button>
     </div>
 
-    <div class="cover-frame" id="coverFrame">
-      <div class="cover-empty" id="coverEmpty">No cover yet</div>
-      <img id="coverImg" style="display:none;">
-    </div>
-    <input type="file" accept="image/*" id="coverInput" style="display:none;">
-
-    <div id="digestReviewSection" class="digest-article" style="display:none;">
-      <h3 id="reviewHeading">Weekly Review</h3>
-      <div class="body-text editable-field" id="reviewText" data-placeholder="Nothing written yet."></div>
+    <div class="digest-book">
+      <div id="digestPageInner"></div>
     </div>
 
-    <div id="digestPreviewSection" style="display:none;">
-      <div id="matchupsRoot"></div>
-      <div class="digest-add-row" id="addMatchupRow" style="display:none;">
-        <button class="btn small" id="addMatchupBtn">+ Add matchup</button>
-      </div>
+    <div class="digest-page-nav">
+      <button class="btn small" id="digestPrevBtn">‹ Prev</button>
+      <span id="digestPageIndicator" class="hint" style="margin:0;"></span>
+      <button class="btn small" id="digestNextBtn">Next ›</button>
     </div>
   </section>
 
@@ -890,6 +940,7 @@ function renderRecords(){
 /* ---------- SRFFL Digest ---------- */
 
 const DEFAULT_POSITIONS = ['QB','RB','WR','TE','FLEX','DST','K'];
+let digestPageIndex = 0;
 
 function issueList(){
   const list = ['SZN'];
@@ -899,11 +950,15 @@ function issueList(){
 
 function issueLabel(weekKey){ return weekKey === 'SZN' ? 'Season Preview' : 'Week ' + weekKey; }
 
-function issueType(weekKey){ return weekKey === 'SZN' ? 'review' : (weekKey.endsWith('A') ? 'preview' : 'review'); }
+function issueType(weekKey){
+  if(weekKey === 'SZN') return 'season';
+  return weekKey.endsWith('A') ? 'preview' : 'review';
+}
 
 function blankMatchup(){
   return {
     id: uid(),
+    gotw: false,
     teamA: { logo:'', name:'', record:'' },
     teamB: { logo:'', name:'', record:'' },
     writeup: '',
@@ -917,11 +972,33 @@ function digestEntry(year, weekKey){
   const y = String(year);
   if(!data.digest[y]) data.digest[y] = {};
   if(!data.digest[y][weekKey]){
-    data.digest[y][weekKey] = issueType(weekKey) === 'preview'
-      ? { cover:'', matchups:[] }
-      : { cover:'', review:'' };
+    const type = issueType(weekKey);
+    if(type === 'preview') data.digest[y][weekKey] = { cover:'', matchups:[] };
+    else if(type === 'season') data.digest[y][weekKey] = { cover:'', teamPages:{}, bracketImage:'', bracketNotes:'' };
+    else data.digest[y][weekKey] = { cover:'', review:'' };
   }
   return data.digest[y][weekKey];
+}
+
+function buildDigestPages(entry, weekKey){
+  const type = issueType(weekKey);
+  const pages = [{ kind:'cover' }];
+  if(type === 'preview'){
+    const matchups = entry.matchups || [];
+    if(matchups.length === 0){
+      pages.push({ kind:'empty-preview' });
+    } else {
+      const gotw = matchups.find(m=>m.gotw);
+      if(gotw) pages.push({ kind:'gotw', matchup: gotw });
+      matchups.filter(m=>m !== gotw).forEach(m=> pages.push({ kind:'matchup', matchup: m }));
+    }
+  } else if(type === 'season'){
+    data.owners.forEach(o=> pages.push({ kind:'team', ownerId: o.id }));
+    pages.push({ kind:'bracket' });
+  } else {
+    pages.push({ kind:'reviewtext' });
+  }
+  return pages;
 }
 
 function renderDigestSelects(){
@@ -944,52 +1021,88 @@ function renderDigestSelects(){
 }
 
 function renderDigest(){
-  const type = issueType(currentDigestWeek);
-  const entry = digestEntry(currentDigestYear, currentDigestWeek);
-
   document.getElementById('setCurrentBtn').style.display = editMode ? 'inline-block' : 'none';
   const isCurrent = data.currentDigest && data.currentDigest.year === currentDigestYear && data.currentDigest.week === currentDigestWeek;
   document.getElementById('currentFlag').style.display = isCurrent ? 'inline-block' : 'none';
 
-  // Cover (click-to-upload)
-  const frame = document.getElementById('coverFrame');
-  const img = document.getElementById('coverImg');
-  const empty = document.getElementById('coverEmpty');
-  frame.classList.toggle('editable', editMode);
-  if(entry.cover){
-    img.src = entry.cover; img.style.display = 'block'; empty.style.display = 'none';
-  } else {
-    img.style.display = 'none'; empty.style.display = 'block';
-    empty.textContent = editMode ? 'Click to add a cover' : 'No cover yet';
-  }
+  const entry = digestEntry(currentDigestYear, currentDigestWeek);
+  const pages = buildDigestPages(entry, currentDigestWeek);
+  if(digestPageIndex < 0) digestPageIndex = 0;
+  if(digestPageIndex >= pages.length) digestPageIndex = pages.length - 1;
 
-  // Toggle preview vs review sections
-  document.getElementById('digestReviewSection').style.display = type === 'review' ? 'block' : 'none';
-  document.getElementById('digestPreviewSection').style.display = type === 'preview' ? 'block' : 'none';
-  document.getElementById('addMatchupRow').style.display = (type === 'preview' && editMode) ? 'flex' : 'none';
+  renderDigestPageContent(entry, pages[digestPageIndex]);
 
-  if(type === 'review'){
-    document.getElementById('reviewHeading').textContent = currentDigestWeek === 'SZN' ? 'Season Preview' : 'Weekly Review';
-    const review = document.getElementById('reviewText');
-    review.textContent = entry.review || '';
-    review.contentEditable = editMode ? 'true' : 'false';
-    fixEditableContrast();
-  } else {
-    renderMatchups(entry);
-  }
+  document.getElementById('digestPageIndicator').textContent = `Page ${digestPageIndex + 1} of ${pages.length}`;
+  document.getElementById('digestPrevBtn').disabled = digestPageIndex === 0;
+  document.getElementById('digestNextBtn').disabled = digestPageIndex === pages.length - 1;
 }
 
-function renderMatchups(entry){
-  const root = document.getElementById('matchupsRoot');
-  root.innerHTML = '';
-  if(entry.matchups.length === 0){
-    root.innerHTML = `<div class="empty" style="max-width:640px; margin:0 auto 1.2rem;">No matchups added yet.${editMode ? ' Click "+ Add matchup" below.' : ''}</div>`;
-    return;
+function renderDigestPageContent(entry, page){
+  const root = document.getElementById('digestPageInner');
+
+  if(page.kind === 'cover'){
+    root.innerHTML = `
+      <div class="cover-frame ${editMode?'editable':''}" id="coverFrame">
+        ${entry.cover
+          ? `<img src="${entry.cover}">`
+          : `<div class="cover-empty">${editMode ? 'Click to add a cover' : 'No cover yet'}</div>`}
+      </div>
+    `;
+    if(editMode){
+      document.getElementById('coverFrame').addEventListener('click', ()=>{
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = ()=>{
+          const file = input.files[0];
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = ()=>{
+            entry.cover = reader.result;
+            saveData();
+            renderDigest();
+          };
+          reader.onerror = ()=> toast('Could not read that image.');
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
+    }
+  } else if(page.kind === 'empty-preview'){
+    root.innerHTML = `
+      <div class="empty" style="max-width:640px; margin:0 auto;">No matchups added yet.${editMode ? ' Use "+ Add matchup" below.' : ''}</div>
+      ${editMode ? `<div class="digest-add-row"><button class="btn small" id="addMatchupBtn">+ Add matchup</button></div>` : ''}
+    `;
+    if(editMode) wireAddMatchupButton(entry);
+  } else if(page.kind === 'gotw' || page.kind === 'matchup'){
+    root.innerHTML = matchupCardHTML(page.matchup, page.kind === 'gotw');
+    wireMatchupCardEvents(root, entry);
+  } else if(page.kind === 'team'){
+    root.innerHTML = teamPageHTML(entry, page.ownerId);
+    wireTeamPageEvents(root, entry, page.ownerId);
+  } else if(page.kind === 'bracket'){
+    root.innerHTML = bracketPageHTML(entry);
+    wireBracketPageEvents(root, entry);
+  } else if(page.kind === 'reviewtext'){
+    root.innerHTML = `
+      <div class="digest-article">
+        <h3>Weekly Review</h3>
+        <div class="body-text editable-field" id="reviewText" data-placeholder="Nothing written yet." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
+      </div>
+    `;
+    if(editMode){
+      document.getElementById('reviewText').addEventListener('blur', (e)=>{
+        entry.review = e.target.textContent;
+        saveData();
+      });
+    }
   }
-  entry.matchups.forEach(m=>{
-    const card = document.createElement('div');
-    card.className = 'matchup-card';
-    card.innerHTML = `
+  fixEditableContrast();
+}
+
+function matchupCardHTML(m, isGotw){
+  return `
+    <div class="matchup-card ${isGotw ? 'gotw-card' : ''}">
+      ${isGotw ? `<div class="gotw-flag">Game of the Week</div>` : ''}
       <div class="matchup-teams">
         ${teamSideHTML(m, 'A')}
         <div class="vs-label">VS</div>
@@ -1014,12 +1127,14 @@ function renderMatchups(entry){
         <span class="field-label">My Prediction</span>
         <div class="body-text editable-field" data-mid="${m.id}" data-field="prediction" ${editMode?'contenteditable="true"':''}>${m.prediction}</div>
       </div>
-      ${editMode ? `<div class="matchup-foot"><button class="btn-danger btn small" data-del-matchup="${m.id}">Remove matchup</button></div>` : ''}
-    `;
-    root.appendChild(card);
-  });
-  wireMatchupEvents(root, entry);
-  fixEditableContrast();
+      ${editMode ? `
+        <div class="matchup-foot">
+          <button class="btn small" data-toggle-gotw="${m.id}">${isGotw ? 'Unset Game of the Week' : 'Set as Game of the Week'}</button>
+          <button class="btn-danger btn small" data-del-matchup="${m.id}">Remove matchup</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 function teamSideHTML(m, side){
@@ -1037,7 +1152,18 @@ function teamSideHTML(m, side){
 
 function findMatchup(entry, id){ return entry.matchups.find(m=>m.id === id); }
 
-function wireMatchupEvents(root, entry){
+function wireAddMatchupButton(entry){
+  const btn = document.getElementById('addMatchupBtn');
+  if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    entry.matchups.push(blankMatchup());
+    saveData();
+    digestPageIndex = 1;
+    renderDigest();
+  });
+}
+
+function wireMatchupCardEvents(root, entry){
   root.querySelectorAll('[data-field][data-mid]:not([data-side])').forEach(el=>{
     el.addEventListener('blur', ()=>{
       const m = findMatchup(entry, el.dataset.mid);
@@ -1065,7 +1191,7 @@ function wireMatchupEvents(root, entry){
           const m = findMatchup(entry, el.dataset.mid);
           (el.dataset.side === 'A' ? m.teamA : m.teamB).logo = reader.result;
           saveData();
-          renderMatchups(entry);
+          renderDigest();
         };
         reader.readAsDataURL(file);
       };
@@ -1078,7 +1204,7 @@ function wireMatchupEvents(root, entry){
       const p = m.positions.find(p=>p.id === btn.dataset.pid);
       p.edge = (p.edge === btn.dataset.side) ? null : btn.dataset.side;
       saveData();
-      renderMatchups(entry);
+      renderDigest();
     });
   });
   root.querySelectorAll('[data-add-pos]').forEach(btn=>{
@@ -1087,7 +1213,7 @@ function wireMatchupEvents(root, entry){
       const label = prompt('Position label (e.g. QB, RB, WR):', '') || 'POS';
       m.positions.push({ id: uid(), label, edge: null });
       saveData();
-      renderMatchups(entry);
+      renderDigest();
     });
   });
   root.querySelectorAll('.pos-del').forEach(btn=>{
@@ -1095,7 +1221,21 @@ function wireMatchupEvents(root, entry){
       const m = findMatchup(entry, btn.dataset.mid);
       m.positions = m.positions.filter(p=>p.id !== btn.dataset.pid);
       saveData();
-      renderMatchups(entry);
+      renderDigest();
+    });
+  });
+  root.querySelectorAll('[data-toggle-gotw]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.toggleGotw;
+      const m = findMatchup(entry, id);
+      const wasGotw = !!m.gotw;
+      entry.matchups.forEach(mm=> mm.gotw = false);
+      m.gotw = !wasGotw;
+      saveData();
+      const pages = buildDigestPages(entry, currentDigestWeek);
+      const idx = pages.findIndex(p=> (p.kind === 'gotw' || p.kind === 'matchup') && p.matchup.id === id);
+      digestPageIndex = idx >= 0 ? idx : 0;
+      renderDigest();
     });
   });
   root.querySelectorAll('[data-del-matchup]').forEach(btn=>{
@@ -1103,17 +1243,192 @@ function wireMatchupEvents(root, entry){
       if(!confirm('Remove this matchup?')) return;
       entry.matchups = entry.matchups.filter(m=>m.id !== btn.dataset.delMatchup);
       saveData();
-      renderMatchups(entry);
+      digestPageIndex = Math.max(0, digestPageIndex - 1);
+      renderDigest();
     });
   });
 }
 
+function ensureTeamPage(entry, ownerId){
+  if(!entry.teamPages) entry.teamPages = {};
+  if(!entry.teamPages[ownerId]){
+    entry.teamPages[ownerId] = {
+      logo:'', lastYearRecord:'', lastYearFinish:'', projection:'',
+      keyPlayers:[{name:'',summary:''},{name:'',summary:''},{name:'',summary:''}],
+      synopsis:''
+    };
+  }
+  return entry.teamPages[ownerId];
+}
+
+function teamPageHTML(entry, ownerId){
+  const owner = data.owners.find(o=>o.id === ownerId);
+  const tp = ensureTeamPage(entry, ownerId);
+  return `
+    <div class="team-page">
+      <div class="hint" style="text-align:center; margin-bottom:.4rem;">${owner ? (owner.team || owner.name) : 'Team'}</div>
+      <div class="team-page-top">
+        <div class="team-page-logo ${editMode?'editable':''}" data-team-logo="${ownerId}">
+          ${tp.logo ? `<img src="${tp.logo}">` : (editMode ? '+ Logo' : '')}
+        </div>
+        <div class="team-page-fields">
+          <div class="team-field-row"><span class="field-label">Last Year Record</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearRecord" ${editMode?'contenteditable="true"':''}>${tp.lastYearRecord || ''}</span></div>
+          <div class="team-field-row"><span class="field-label">Last Year Finish</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearFinish" ${editMode?'contenteditable="true"':''}>${tp.lastYearFinish || ''}</span></div>
+          <div class="team-field-row"><span class="field-label">2026 Projection</span><span class="editable-field" data-tp="${ownerId}" data-field="projection" ${editMode?'contenteditable="true"':''}>${tp.projection || ''}</span></div>
+        </div>
+      </div>
+      <h4>Key Players to Watch</h4>
+      ${tp.keyPlayers.map((kp,i)=>`
+        <div class="key-player-row">
+          <span class="kp-name editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="name" ${editMode?'contenteditable="true"':''}>${kp.name || (editMode ? 'Player name' : '')}</span>
+          <div class="kp-summary editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="summary" ${editMode?'contenteditable="true"':''} data-placeholder="Quick summary...">${kp.summary || ''}</div>
+        </div>
+      `).join('')}
+      <h4>Synopsis</h4>
+      <div class="synopsis-text editable-field" data-tp="${ownerId}" data-field="synopsis" ${editMode?'contenteditable="true"':''} data-placeholder="Full team synopsis...">${tp.synopsis || ''}</div>
+    </div>
+  `;
+}
+
+function wireTeamPageEvents(root, entry, ownerId){
+  const tp = ensureTeamPage(entry, ownerId);
+  root.querySelectorAll('[data-tp][data-field]:not([data-kp])').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      tp[el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  root.querySelectorAll('[data-tp][data-kp]').forEach(el=>{
+    el.addEventListener('blur', ()=>{
+      tp.keyPlayers[Number(el.dataset.kp)][el.dataset.field] = el.textContent.trim();
+      saveData();
+    });
+  });
+  const logoEl = root.querySelector('[data-team-logo]');
+  if(logoEl && editMode){
+    logoEl.addEventListener('click', ()=>{
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      input.onchange = ()=>{
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          tp.logo = reader.result;
+          saveData();
+          renderDigest();
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    });
+  }
+}
+
+function bracketPageHTML(entry){
+  return `
+    <div class="digest-article">
+      <h3>Playoff Bracket Prediction</h3>
+      <div id="digestBracketRoot"></div>
+      <div class="body-text editable-field" id="bracketNotes" data-placeholder="Bold predictions, sleeper picks, trash talk..." ${editMode?'contenteditable="true"':''}>${entry.bracketNotes || ''}</div>
+    </div>
+  `;
+}
+
+function ensureBracketPrediction(entry){
+  if(!entry.bracketPrediction){
+    entry.bracketPrediction = {
+      qfA_top:'', qfA_bottom:'', qfB_top:'', qfB_bottom:'',
+      qfC_top:'', qfC_bottom:'', qfD_top:'', qfD_bottom:'',
+      sfLeft:'', sfRight:'', champion:''
+    };
+  }
+  return entry.bracketPrediction;
+}
+
+function bracketSlotHTML(entry, year, slotKey){
+  const pred = ensureBracketPrediction(entry);
+  const ownerId = pred[slotKey];
+  const owner = data.owners.find(o=>o.id === ownerId);
+  if(editMode){
+    const options = ['<option value="">TBD</option>']
+      .concat(data.owners.map(o=>`<option value="${o.id}" ${o.id === ownerId ? 'selected' : ''}>${o.team || o.name}</option>`))
+      .join('');
+    return `<div class="bracket-team-row"><select class="bracket-pred-select" data-slot="${slotKey}">${options}</select></div>`;
+  }
+  return `
+    <div class="bracket-team-row">
+      ${owner ? teamLogoHTML(owner.id, year) : ''}
+      <span class="bracket-team-name">${owner ? (owner.team || owner.name) : 'TBD'}</span>
+    </div>
+  `;
+}
+
+function bracketPredMatchupBox(entry, year, topSlot, bottomSlot){
+  return `<div class="bracket-matchup">${bracketSlotHTML(entry, year, topSlot)}<div class="bracket-vs">vs</div>${bracketSlotHTML(entry, year, bottomSlot)}</div>`;
+}
+
+function renderBracketPrediction(container, entry, year){
+  if(!container) return;
+  ensureBracketPrediction(entry);
+  container.innerHTML = `
+    <div class="bracket-grid">
+      <div class="bracket-col">
+        ${bracketPredMatchupBox(entry, year, 'qfA_top', 'qfA_bottom')}
+        ${bracketPredMatchupBox(entry, year, 'qfB_top', 'qfB_bottom')}
+      </div>
+      <div class="bracket-col bracket-col-center">
+        <div class="bracket-tbd">${bracketSlotHTML(entry, year, 'sfLeft')}</div>
+        <div class="bracket-champ">${bracketSlotHTML(entry, year, 'champion')}</div>
+        <div class="bracket-tbd">${bracketSlotHTML(entry, year, 'sfRight')}</div>
+      </div>
+      <div class="bracket-col">
+        ${bracketPredMatchupBox(entry, year, 'qfC_top', 'qfC_bottom')}
+        ${bracketPredMatchupBox(entry, year, 'qfD_top', 'qfD_bottom')}
+      </div>
+    </div>
+    ${editMode ? `<p class="hint" style="text-align:center; margin-top:.6rem;">Pick your own prediction for every round — this is separate from the live bracket on the Standings tab and won't auto-fill.</p>` : ''}
+  `;
+  if(editMode){
+    container.querySelectorAll('.bracket-pred-select').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const pred = ensureBracketPrediction(entry);
+        pred[sel.dataset.slot] = sel.value;
+        saveData();
+      });
+    });
+  }
+}
+
+function wireBracketPageEvents(root, entry){
+  renderBracketPrediction(document.getElementById('digestBracketRoot'), entry, currentDigestYear);
+  if(!editMode) return;
+  document.getElementById('bracketNotes').addEventListener('blur', (e)=>{
+    entry.bracketNotes = e.target.textContent;
+    saveData();
+  });
+}
+
+function flipDigestTo(newIndex){
+  const container = document.getElementById('digestPageInner');
+  container.classList.add('flip-out');
+  setTimeout(()=>{
+    digestPageIndex = newIndex;
+    renderDigest();
+    container.classList.remove('flip-out');
+    container.classList.add('flip-in');
+    setTimeout(()=> container.classList.remove('flip-in'), 260);
+  }, 200);
+}
+
 document.getElementById('digestYearSelect').addEventListener('change', (e)=>{
   currentDigestYear = Number(e.target.value);
+  digestPageIndex = 0;
   renderDigest();
 });
 document.getElementById('digestWeekSelect').addEventListener('change', (e)=>{
   currentDigestWeek = e.target.value;
+  digestPageIndex = 0;
   renderDigest();
 });
 document.getElementById('setCurrentBtn').addEventListener('click', ()=>{
@@ -1122,32 +1437,13 @@ document.getElementById('setCurrentBtn').addEventListener('click', ()=>{
   toast('Marked as current issue');
   renderDigest();
 });
-document.getElementById('coverFrame').addEventListener('click', ()=>{
-  if(!editMode) return;
-  document.getElementById('coverInput').click();
+document.getElementById('digestPrevBtn').addEventListener('click', ()=>{
+  if(digestPageIndex > 0) flipDigestTo(digestPageIndex - 1);
 });
-document.getElementById('coverInput').addEventListener('change', (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    const entry = digestEntry(currentDigestYear, currentDigestWeek);
-    entry.cover = reader.result;
-    saveData();
-    renderDigest();
-  };
-  reader.onerror = ()=> toast('Could not read that image.');
-  reader.readAsDataURL(file);
-});
-document.getElementById('reviewText').addEventListener('blur', ()=>{
-  digestEntry(currentDigestYear, currentDigestWeek).review = document.getElementById('reviewText').textContent;
-  saveData();
-});
-document.getElementById('addMatchupBtn').addEventListener('click', ()=>{
+document.getElementById('digestNextBtn').addEventListener('click', ()=>{
   const entry = digestEntry(currentDigestYear, currentDigestWeek);
-  entry.matchups.push(blankMatchup());
-  saveData();
-  renderMatchups(entry);
+  const pages = buildDigestPages(entry, currentDigestWeek);
+  if(digestPageIndex < pages.length - 1) flipDigestTo(digestPageIndex + 1);
 });
 
 /* ---------- Scoring engine ---------- */
@@ -1697,6 +1993,7 @@ function renderSeasonStandings(){
   if(data.owners.length === 0){
     head.innerHTML = '';
     body.innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
+    document.getElementById('standingsBracket').innerHTML = '';
     return;
   }
 
@@ -1731,6 +2028,59 @@ function renderSeasonStandings(){
     `;
   });
   body.innerHTML = html;
+
+  renderPlayoffBracket(document.getElementById('standingsBracket'), currentSeason);
+}
+
+function teamLogoHTML(ownerId, year){
+  const idx = data.owners.findIndex(o=>o.id === ownerId);
+  const owner = data.owners[idx];
+  const logo = data.digest[String(year)]?.SZN?.teamPages?.[ownerId]?.logo;
+  if(logo) return `<img src="${logo}" class="bracket-logo-img">`;
+  return `<span class="bracket-logo-fallback" style="background:${colorFor(idx < 0 ? 0 : idx)}">${initials(owner ? (owner.team || owner.name) : '?')}</span>`;
+}
+
+function renderPlayoffBracket(container, year){
+  if(!container) return;
+  const rows = orderedStandings(year);
+  if(rows.length < 8){
+    container.innerHTML = `<div class="empty">Need at least 8 teams with standings to build a bracket.</div>`;
+    return;
+  }
+  const seeds = rows.slice(0, 8);
+
+  function seedRow(seedNum){
+    const r = seeds[seedNum - 1];
+    return `
+      <div class="bracket-team-row">
+        <span class="bracket-seed">${seedNum}</span>
+        ${teamLogoHTML(r.owner.id, year)}
+        <span class="bracket-team-name">${r.owner.team || r.owner.name}</span>
+      </div>
+    `;
+  }
+  function matchupBox(seedA, seedB){
+    return `<div class="bracket-matchup">${seedRow(seedA)}<div class="bracket-vs">vs</div>${seedRow(seedB)}</div>`;
+  }
+
+  container.innerHTML = `
+    <div class="bracket-grid">
+      <div class="bracket-col">
+        ${matchupBox(1, 8)}
+        ${matchupBox(4, 5)}
+      </div>
+      <div class="bracket-col bracket-col-center">
+        <div class="bracket-tbd">Semifinal winner</div>
+        <div class="bracket-champ">CHAMPS</div>
+        <div class="bracket-tbd">Semifinal winner</div>
+      </div>
+      <div class="bracket-col">
+        ${matchupBox(2, 7)}
+        ${matchupBox(3, 6)}
+      </div>
+    </div>
+    <p class="hint" style="text-align:center; margin-top:.8rem;">Seeded from current standings — updates automatically as scores come in. Semifinal and championship results aren't tracked yet, so those slots stay TBD.</p>
+  `;
 }
 
 /* ---------- Schedule ---------- */
