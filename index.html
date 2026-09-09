@@ -217,9 +217,13 @@
   .team-field-row{ font-size:.82rem; }
   .team-field-row .field-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); display:block; }
   .team-page h4{ font-size:.85rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.25rem; margin:1rem 0 .6rem; }
-  .key-player-row{ margin-bottom:.7rem; }
+  .key-player-row{ margin-bottom:.7rem; display:flex; gap:.6rem; align-items:flex-start; }
   .key-player-row .kp-name{ font-family:'Anton',sans-serif; font-size:.9rem; display:block; margin-bottom:.15rem; }
   .key-player-row .kp-summary{ font-size:.82rem; }
+  .kp-photo{ width:44px; height:44px; border-radius:6px; background:var(--chalk-2); border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:.8rem; color:var(--ink-soft); flex-shrink:0; }
+  .kp-photo.editable{ cursor:pointer; }
+  .kp-photo img{ width:100%; height:100%; object-fit:cover; }
+  .kp-text{ flex:1; min-width:0; }
   .synopsis-text{ font-size:.88rem; white-space:pre-wrap; min-height:3em; }
 
   /* Bracket page */
@@ -267,7 +271,21 @@
   .bracket-vs{ text-align:center; font-size:.62rem; color:var(--ink-soft); padding:.15rem 0; text-transform:uppercase; letter-spacing:.04em; }
   .bracket-tbd{ background:var(--chalk-2); border:1px dashed var(--line); border-radius:var(--radius); padding:.6rem; text-align:center; font-size:.72rem; color:var(--ink-soft); }
   .bracket-champ{ background:var(--field); color:var(--mustard); border-radius:var(--radius); padding:.8rem; text-align:center; font-family:'Anton',sans-serif; font-size:1rem; letter-spacing:.03em; }
-  .bracket-pred-select{ width:100%; font-family:'Roboto Slab',serif; font-size:.8rem; padding:.25rem .3rem; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); }
+
+  /* Vertical photo bracket (Season Preview) */
+  .bracket-vertical{ max-width:380px; margin:0 auto; display:flex; flex-direction:column; gap:1rem; }
+  .bracket-half{ display:flex; flex-direction:column; gap:.6rem; padding:.8rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); }
+  .bracket-pair-row{ display:flex; align-items:center; gap:.5rem; }
+  .bracket-pair-stack{ display:flex; flex-direction:column; gap:.3rem; }
+  .bracket-arrow{ color:var(--ink-soft); font-size:1rem; flex-shrink:0; }
+  .bracket-sf-row{ display:flex; align-items:center; gap:.5rem; justify-content:center; padding-top:.4rem; border-top:1px dashed var(--line); }
+  .bracket-photo-box{ width:44px; height:44px; border-radius:6px; background:var(--chalk-2); border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:.85rem; color:var(--ink-soft); flex-shrink:0; }
+  .bracket-photo-box.editable{ cursor:pointer; }
+  .bracket-photo-box img{ width:100%; height:100%; object-fit:cover; }
+  .bracket-champ-row{ display:flex; align-items:center; justify-content:center; }
+  .bracket-champ-box{ display:flex; flex-direction:column; align-items:center; gap:.5rem; background:var(--field); padding:1rem 1.4rem; border-radius:var(--radius); }
+  .bracket-champ-box .bracket-champ-photo{ width:64px; height:64px; }
+  .bracket-champ-label{ color:var(--mustard); font-family:'Anton',sans-serif; font-size:.95rem; letter-spacing:.05em; }
 
   /* Transactions */
   .txn-row{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; font-size:.86rem; }
@@ -973,8 +991,12 @@ function digestEntry(year, weekKey){
   if(!data.digest[y]) data.digest[y] = {};
   if(!data.digest[y][weekKey]){
     const type = issueType(weekKey);
-    if(type === 'preview') data.digest[y][weekKey] = { cover:'', matchups:[] };
-    else if(type === 'season') data.digest[y][weekKey] = { cover:'', teamPages:{}, bracketImage:'', bracketNotes:'' };
+    if(type === 'preview'){
+      const matchups = Array.from({ length: 6 }, ()=> blankMatchup());
+      matchups[0].gotw = true;
+      data.digest[y][weekKey] = { cover:'', matchups };
+    }
+    else if(type === 'season') data.digest[y][weekKey] = { cover:'', teamPages:{}, bracketPrediction:{}, bracketNotes:'' };
     else data.digest[y][weekKey] = { cover:'', review:'' };
   }
   return data.digest[y][weekKey];
@@ -1077,7 +1099,7 @@ function renderDigestPageContent(entry, page){
     root.innerHTML = matchupCardHTML(page.matchup, page.kind === 'gotw');
     wireMatchupCardEvents(root, entry);
   } else if(page.kind === 'team'){
-    root.innerHTML = teamPageHTML(entry, page.ownerId);
+    root.innerHTML = teamPageHTML(entry, page.ownerId, currentDigestYear);
     wireTeamPageEvents(root, entry, page.ownerId);
   } else if(page.kind === 'bracket'){
     root.innerHTML = bracketPageHTML(entry);
@@ -1254,16 +1276,17 @@ function ensureTeamPage(entry, ownerId){
   if(!entry.teamPages[ownerId]){
     entry.teamPages[ownerId] = {
       logo:'', lastYearRecord:'', lastYearFinish:'', projection:'',
-      keyPlayers:[{name:'',summary:''},{name:'',summary:''},{name:'',summary:''}],
+      keyPlayers:[{name:'',summary:'',photo:''},{name:'',summary:'',photo:''},{name:'',summary:'',photo:''}],
       synopsis:''
     };
   }
   return entry.teamPages[ownerId];
 }
 
-function teamPageHTML(entry, ownerId){
+function teamPageHTML(entry, ownerId, year){
   const owner = data.owners.find(o=>o.id === ownerId);
   const tp = ensureTeamPage(entry, ownerId);
+  const lastYear = Number(year) - 1;
   return `
     <div class="team-page">
       <div class="hint" style="text-align:center; margin-bottom:.4rem;">${owner ? (owner.team || owner.name) : 'Team'}</div>
@@ -1272,16 +1295,21 @@ function teamPageHTML(entry, ownerId){
           ${tp.logo ? `<img src="${tp.logo}">` : (editMode ? '+ Logo' : '')}
         </div>
         <div class="team-page-fields">
-          <div class="team-field-row"><span class="field-label">Last Year Record</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearRecord" ${editMode?'contenteditable="true"':''}>${tp.lastYearRecord || ''}</span></div>
-          <div class="team-field-row"><span class="field-label">Last Year Finish</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearFinish" ${editMode?'contenteditable="true"':''}>${tp.lastYearFinish || ''}</span></div>
-          <div class="team-field-row"><span class="field-label">2026 Projection</span><span class="editable-field" data-tp="${ownerId}" data-field="projection" ${editMode?'contenteditable="true"':''}>${tp.projection || ''}</span></div>
+          <div class="team-field-row"><span class="field-label">${lastYear} Record</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearRecord" ${editMode?'contenteditable="true"':''}>${tp.lastYearRecord || ''}</span></div>
+          <div class="team-field-row"><span class="field-label">${lastYear} Finish</span><span class="editable-field" data-tp="${ownerId}" data-field="lastYearFinish" ${editMode?'contenteditable="true"':''}>${tp.lastYearFinish || ''}</span></div>
+          <div class="team-field-row"><span class="field-label">${year} Projection</span><span class="editable-field" data-tp="${ownerId}" data-field="projection" ${editMode?'contenteditable="true"':''}>${tp.projection || ''}</span></div>
         </div>
       </div>
       <h4>Key Players to Watch</h4>
       ${tp.keyPlayers.map((kp,i)=>`
         <div class="key-player-row">
-          <span class="kp-name editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="name" ${editMode?'contenteditable="true"':''}>${kp.name || (editMode ? 'Player name' : '')}</span>
-          <div class="kp-summary editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="summary" ${editMode?'contenteditable="true"':''} data-placeholder="Quick summary...">${kp.summary || ''}</div>
+          <div class="kp-photo ${editMode?'editable':''}" data-kp-photo="${ownerId}:${i}">
+            ${kp.photo ? `<img src="${kp.photo}">` : (editMode ? '+' : '')}
+          </div>
+          <div class="kp-text">
+            <span class="kp-name editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="name" ${editMode?'contenteditable="true"':''}>${kp.name || (editMode ? 'Player name' : '')}</span>
+            <div class="kp-summary editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="summary" ${editMode?'contenteditable="true"':''} data-placeholder="Quick summary...">${kp.summary || ''}</div>
+          </div>
         </div>
       `).join('')}
       <h4>Synopsis</h4>
@@ -1323,6 +1351,27 @@ function wireTeamPageEvents(root, entry, ownerId){
       input.click();
     });
   }
+  if(editMode){
+    root.querySelectorAll('[data-kp-photo]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const idx = Number(el.dataset.kpPhoto.split(':')[1]);
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = ()=>{
+          const file = input.files[0];
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = ()=>{
+            tp.keyPlayers[idx].photo = reader.result;
+            saveData();
+            renderDigest();
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
+    });
+  }
 }
 
 function bracketPageHTML(entry){
@@ -1336,72 +1385,100 @@ function bracketPageHTML(entry){
 }
 
 function ensureBracketPrediction(entry){
-  if(!entry.bracketPrediction){
-    entry.bracketPrediction = {
-      qfA_top:'', qfA_bottom:'', qfB_top:'', qfB_bottom:'',
-      qfC_top:'', qfC_bottom:'', qfD_top:'', qfD_bottom:'',
-      sfLeft:'', sfRight:'', champion:''
-    };
-  }
-  return entry.bracketPrediction;
+  if(!entry.bracketPrediction) entry.bracketPrediction = {};
+  const p = entry.bracketPrediction;
+  const keys = [
+    'qf1_top','qf1_bottom','qf1_winner','qf2_top','qf2_bottom','qf2_winner','sf1_winner',
+    'qf3_top','qf3_bottom','qf3_winner','qf4_top','qf4_bottom','qf4_winner','sf2_winner',
+    'champion'
+  ];
+  keys.forEach(k=>{ if(p[k] === undefined) p[k] = ''; });
+  return p;
 }
 
-function bracketSlotHTML(entry, year, slotKey){
-  const pred = ensureBracketPrediction(entry);
-  const ownerId = pred[slotKey];
-  const owner = data.owners.find(o=>o.id === ownerId);
-  if(editMode){
-    const options = ['<option value="">TBD</option>']
-      .concat(data.owners.map(o=>`<option value="${o.id}" ${o.id === ownerId ? 'selected' : ''}>${o.team || o.name}</option>`))
-      .join('');
-    return `<div class="bracket-team-row"><select class="bracket-pred-select" data-slot="${slotKey}">${options}</select></div>`;
-  }
+function bracketPhotoSlotHTML(pred, key, extraClass){
+  const photo = pred[key];
   return `
-    <div class="bracket-team-row">
-      ${owner ? teamLogoHTML(owner.id, year) : ''}
-      <span class="bracket-team-name">${owner ? (owner.team || owner.name) : 'TBD'}</span>
+    <div class="bracket-photo-box ${extraClass||''} ${editMode?'editable':''}" data-bracket-slot="${key}">
+      ${photo ? `<img src="${photo}">` : (editMode ? '+' : '')}
     </div>
   `;
 }
 
-function bracketPredMatchupBox(entry, year, topSlot, bottomSlot){
-  return `<div class="bracket-matchup">${bracketSlotHTML(entry, year, topSlot)}<div class="bracket-vs">vs</div>${bracketSlotHTML(entry, year, bottomSlot)}</div>`;
-}
-
-function renderBracketPrediction(container, entry, year){
+function renderBracketPrediction(container, entry){
   if(!container) return;
-  ensureBracketPrediction(entry);
+  const pred = ensureBracketPrediction(entry);
+  const slot = (key, extraClass)=> bracketPhotoSlotHTML(pred, key, extraClass);
+
   container.innerHTML = `
-    <div class="bracket-grid">
-      <div class="bracket-col">
-        ${bracketPredMatchupBox(entry, year, 'qfA_top', 'qfA_bottom')}
-        ${bracketPredMatchupBox(entry, year, 'qfB_top', 'qfB_bottom')}
+    <div class="bracket-vertical">
+      <div class="bracket-half">
+        <div class="bracket-pair-row">
+          <div class="bracket-pair-stack">${slot('qf1_top')}${slot('qf1_bottom')}</div>
+          <div class="bracket-arrow">→</div>
+          ${slot('qf1_winner')}
+        </div>
+        <div class="bracket-pair-row">
+          <div class="bracket-pair-stack">${slot('qf2_top')}${slot('qf2_bottom')}</div>
+          <div class="bracket-arrow">→</div>
+          ${slot('qf2_winner')}
+        </div>
+        <div class="bracket-sf-row">
+          <div class="bracket-arrow">→</div>
+          ${slot('sf1_winner')}
+        </div>
       </div>
-      <div class="bracket-col bracket-col-center">
-        <div class="bracket-tbd">${bracketSlotHTML(entry, year, 'sfLeft')}</div>
-        <div class="bracket-champ">${bracketSlotHTML(entry, year, 'champion')}</div>
-        <div class="bracket-tbd">${bracketSlotHTML(entry, year, 'sfRight')}</div>
+      <div class="bracket-half">
+        <div class="bracket-pair-row">
+          <div class="bracket-pair-stack">${slot('qf3_top')}${slot('qf3_bottom')}</div>
+          <div class="bracket-arrow">→</div>
+          ${slot('qf3_winner')}
+        </div>
+        <div class="bracket-pair-row">
+          <div class="bracket-pair-stack">${slot('qf4_top')}${slot('qf4_bottom')}</div>
+          <div class="bracket-arrow">→</div>
+          ${slot('qf4_winner')}
+        </div>
+        <div class="bracket-sf-row">
+          <div class="bracket-arrow">→</div>
+          ${slot('sf2_winner')}
+        </div>
       </div>
-      <div class="bracket-col">
-        ${bracketPredMatchupBox(entry, year, 'qfC_top', 'qfC_bottom')}
-        ${bracketPredMatchupBox(entry, year, 'qfD_top', 'qfD_bottom')}
+      <div class="bracket-champ-row">
+        <div class="bracket-champ-box">
+          ${slot('champion', 'bracket-champ-photo')}
+          <div class="bracket-champ-label">CHAMPS</div>
+        </div>
       </div>
     </div>
-    ${editMode ? `<p class="hint" style="text-align:center; margin-top:.6rem;">Pick your own prediction for every round — this is separate from the live bracket on the Standings tab and won't auto-fill.</p>` : ''}
+    ${editMode ? `<p class="hint" style="text-align:center; margin-top:.6rem;">Tap any box to add a team photo or logo — fill in your own prediction for every round.</p>` : ''}
   `;
+
   if(editMode){
-    container.querySelectorAll('.bracket-pred-select').forEach(sel=>{
-      sel.addEventListener('change', ()=>{
-        const pred = ensureBracketPrediction(entry);
-        pred[sel.dataset.slot] = sel.value;
-        saveData();
+    container.querySelectorAll('[data-bracket-slot]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const key = el.dataset.bracketSlot;
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = ()=>{
+          const file = input.files[0];
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = ()=>{
+            pred[key] = reader.result;
+            saveData();
+            renderDigest();
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
       });
     });
   }
 }
 
 function wireBracketPageEvents(root, entry){
-  renderBracketPrediction(document.getElementById('digestBracketRoot'), entry, currentDigestYear);
+  renderBracketPrediction(document.getElementById('digestBracketRoot'), entry);
   if(!editMode) return;
   document.getElementById('bracketNotes').addEventListener('blur', (e)=>{
     entry.bracketNotes = e.target.textContent;
