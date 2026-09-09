@@ -417,7 +417,7 @@
 
     <div id="digestReviewSection" class="digest-article" style="display:none;">
       <h3 id="reviewHeading">Weekly Review</h3>
-      <div class="body-text editable-field" id="reviewText" data-placeholder="No review written yet."></div>
+      <div class="body-text editable-field" id="reviewText" data-placeholder="Nothing written yet."></div>
     </div>
 
     <div id="digestPreviewSection" style="display:none;">
@@ -892,12 +892,14 @@ function renderRecords(){
 const DEFAULT_POSITIONS = ['QB','RB','WR','TE','FLEX','DST','K'];
 
 function issueList(){
-  const list = [];
+  const list = ['SZN'];
   DIGEST_WEEKS.forEach(w=>{ list.push(w + 'A'); list.push(w + 'B'); });
   return list;
 }
 
-function issueType(weekKey){ return weekKey.endsWith('A') ? 'preview' : 'review'; }
+function issueLabel(weekKey){ return weekKey === 'SZN' ? 'Season Preview' : 'Week ' + weekKey; }
+
+function issueType(weekKey){ return weekKey === 'SZN' ? 'review' : (weekKey.endsWith('A') ? 'preview' : 'review'); }
 
 function blankMatchup(){
   return {
@@ -935,7 +937,7 @@ function renderDigestSelects(){
   weekSel.innerHTML = '';
   issueList().forEach(key=>{
     const opt = document.createElement('option');
-    opt.value = key; opt.textContent = 'Week ' + key;
+    opt.value = key; opt.textContent = issueLabel(key);
     if(key === currentDigestWeek) opt.selected = true;
     weekSel.appendChild(opt);
   });
@@ -967,6 +969,7 @@ function renderDigest(){
   document.getElementById('addMatchupRow').style.display = (type === 'preview' && editMode) ? 'flex' : 'none';
 
   if(type === 'review'){
+    document.getElementById('reviewHeading').textContent = currentDigestWeek === 'SZN' ? 'Season Preview' : 'Weekly Review';
     const review = document.getElementById('reviewText');
     review.textContent = entry.review || '';
     review.contentEditable = editMode ? 'true' : 'false';
