@@ -146,6 +146,22 @@
   .ledger-del{ float:right; }
 
   /* Digest — flip book */
+  .digest-fullscreen{
+    position:fixed; inset:0; z-index:1000; background:var(--chalk);
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .digest-fs-close{
+    position:sticky; top:.6rem; align-self:flex-end; margin:0 .8rem 0 0;
+    width:36px; height:36px; border-radius:50%; border:none; background:var(--field); color:var(--mustard);
+    font-size:1rem; cursor:pointer; z-index:2; flex-shrink:0;
+  }
+  .digest-fs-page-wrap{ flex:1; padding:0 1.1rem 1rem; display:flex; align-items:flex-start; justify-content:center; }
+  .digest-fs-page-wrap > div{ width:100%; }
+  .digest-fs-nav{
+    position:sticky; bottom:0; background:var(--chalk); border-top:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; gap:1rem; padding:.8rem; flex-shrink:0;
+  }
+  .cover-frame.viewable{ cursor:pointer; }
   .digest-toolbar{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1.1rem; }
   .digest-toolbar .current-flag{ font-size:.7rem; color:var(--field); background:var(--mustard); padding:.2rem .5rem; border-radius:3px; font-weight:700; letter-spacing:.03em; }
 
@@ -519,6 +535,18 @@
   </section>
 
 </main>
+
+<div id="digestFullscreen" class="digest-fullscreen" style="display:none;">
+  <button class="digest-fs-close" id="digestFsClose">✕</button>
+  <div class="digest-fs-page-wrap">
+    <div id="digestFsPageInner"></div>
+  </div>
+  <div class="digest-fs-nav">
+    <button class="btn small" id="digestFsPrevBtn">‹ Prev</button>
+    <span id="digestFsPageIndicator" class="hint" style="margin:0;"></span>
+    <button class="btn small" id="digestFsNextBtn">Next ›</button>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -1034,6 +1062,7 @@ function renderRecords(){
 
 const DEFAULT_POSITIONS = ['QB','RB','WR','TE','FLEX','DST','K'];
 let digestPageIndex = 0;
+let digestFullscreenOpen = false;
 
 function issueList(){
   const list = ['SZN'];
@@ -1127,19 +1156,42 @@ function renderDigest(){
   if(digestPageIndex < 0) digestPageIndex = 0;
   if(digestPageIndex >= pages.length) digestPageIndex = pages.length - 1;
 
-  renderDigestPageContent(entry, pages[digestPageIndex]);
+  const activeId = digestFullscreenOpen ? 'digestFsPageInner' : 'digestPageInner';
+  const inactiveId = digestFullscreenOpen ? 'digestPageInner' : 'digestFsPageInner';
+  const inactiveEl = document.getElementById(inactiveId);
+  if(inactiveEl) inactiveEl.innerHTML = '';
 
-  document.getElementById('digestPageIndicator').textContent = `Page ${digestPageIndex + 1} of ${pages.length}`;
+  renderDigestPageContent(entry, pages[digestPageIndex], activeId);
+
+  const indicatorText = `Page ${digestPageIndex + 1} of ${pages.length}`;
+  document.getElementById('digestPageIndicator').textContent = indicatorText;
+  document.getElementById('digestFsPageIndicator').textContent = indicatorText;
   document.getElementById('digestPrevBtn').disabled = digestPageIndex === 0;
   document.getElementById('digestNextBtn').disabled = digestPageIndex === pages.length - 1;
+  document.getElementById('digestFsPrevBtn').disabled = digestPageIndex === 0;
+  document.getElementById('digestFsNextBtn').disabled = digestPageIndex === pages.length - 1;
 }
 
-function renderDigestPageContent(entry, page){
-  const root = document.getElementById('digestPageInner');
+function openDigestFullscreen(){
+  digestFullscreenOpen = true;
+  document.getElementById('digestFullscreen').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  renderDigest();
+}
+
+function closeDigestFullscreen(){
+  digestFullscreenOpen = false;
+  document.getElementById('digestFullscreen').style.display = 'none';
+  document.body.style.overflow = '';
+  renderDigest();
+}
+
+function renderDigestPageContent(entry, page, containerId){
+  const root = document.getElementById(containerId || 'digestPageInner');
 
   if(page.kind === 'cover'){
     root.innerHTML = `
-      <div class="cover-frame ${editMode?'editable':''}" id="coverFrame">
+      <div class="cover-frame ${editMode ? 'editable' : 'viewable'}" id="coverFrame">
         ${entry.cover
           ? `<img src="${entry.cover}">`
           : `<div class="cover-empty">${editMode ? 'Click to add a cover' : 'No cover yet'}</div>`}
@@ -1153,6 +1205,8 @@ function renderDigestPageContent(entry, page){
           renderDigest();
         });
       });
+    } else if(!digestFullscreenOpen){
+      document.getElementById('coverFrame').addEventListener('click', openDigestFullscreen);
     }
   } else if(page.kind === 'empty-preview'){
     root.innerHTML = `
@@ -1516,7 +1570,8 @@ function wireBracketPageEvents(root, entry){
 }
 
 function flipDigestTo(newIndex){
-  const container = document.getElementById('digestPageInner');
+  const containerId = digestFullscreenOpen ? 'digestFsPageInner' : 'digestPageInner';
+  const container = document.getElementById(containerId);
   container.classList.add('flip-out');
   setTimeout(()=>{
     digestPageIndex = newIndex;
@@ -1551,6 +1606,15 @@ document.getElementById('digestNextBtn').addEventListener('click', ()=>{
   const pages = buildDigestPages(entry, currentDigestWeek);
   if(digestPageIndex < pages.length - 1) flipDigestTo(digestPageIndex + 1);
 });
+document.getElementById('digestFsPrevBtn').addEventListener('click', ()=>{
+  if(digestPageIndex > 0) flipDigestTo(digestPageIndex - 1);
+});
+document.getElementById('digestFsNextBtn').addEventListener('click', ()=>{
+  const entry = digestEntry(currentDigestYear, currentDigestWeek);
+  const pages = buildDigestPages(entry, currentDigestWeek);
+  if(digestPageIndex < pages.length - 1) flipDigestTo(digestPageIndex + 1);
+});
+document.getElementById('digestFsClose').addEventListener('click', closeDigestFullscreen);
 
 /* ---------- Scoring engine ---------- */
 
