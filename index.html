@@ -375,7 +375,8 @@
     <select id="seasonSelect"></select>
     <button class="btn small" id="addSeasonBtn">+ Add season</button>
   </div>
-  <div class="toolbar-right" style="display:flex; gap:.5rem; align-items:center;">
+  <div class="toolbar-right" style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+    <button class="btn small" id="fixImagesBtn" style="display:none;">Move images to storage</button>
     <button class="btn small" id="changePinBtn" style="display:none;">Change PIN</button>
     <button class="btn" id="editToggle">Edit mode: Off</button>
   </div>
@@ -589,12 +590,86 @@ async function loadData(){
 
 async function saveData(){
   if(!sb){ toast('Supabase isn\'t configured yet.'); return; }
+  const payloadKB = Math.round(new Blob([JSON.stringify(data)]).size / 1024);
+  if(payloadKB > 800){
+    toast(`Warning: your data is ${payloadKB}KB — getting close to a size limit that can make saves fail. Use "Move images to storage" in Edit mode.`);
+  }
   try{
     const { error } = await sb.from('league_data').update({ data, updated_at: new Date().toISOString() }).eq('id', 'main');
-    if(error){ toast('Save failed — try again.'); }
+    if(error){ toast('Save failed: ' + (error.message || 'unknown error') + '. Your change is NOT saved — do not close this tab.'); }
   }catch(e){
-    toast('Save failed — check your connection and try again.');
+    toast('Save failed: ' + (e.message || 'check your connection') + '. Your change is NOT saved — do not close this tab.');
   }
+}
+
+async function uploadImageToStorage(file){
+  if(!sb) throw new Error('Supabase not configured');
+  const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || '');
+  const ext = (extMatch ? extMatch[1] : (file.type.split('/')[1] || 'jpg')).toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: uploadError } = await sb.storage.from('srffl-images').upload(path, file, { upsert: false, contentType: file.type || undefined });
+  if(uploadError) throw uploadError;
+  const { data: urlData } = sb.storage.from('srffl-images').getPublicUrl(path);
+  return urlData.publicUrl;
+}
+
+function pickAndUploadImage(onUploaded){
+  if(!sb){ toast('Supabase isn\'t configured yet.'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = async ()=>{
+    const file = input.files[0];
+    if(!file) return;
+    toast('Uploading image...');
+    try{
+      const url = await uploadImageToStorage(file);
+      onUploaded(url);
+    }catch(e){
+      toast('Image upload failed: ' + (e.message || 'try again'));
+    }
+  };
+  input.click();
+}
+
+async function migrateBase64ImagesToStorage(){
+  if(!sb){ toast('Supabase isn\'t configured yet.'); return; }
+  if(!confirm('This scans all your saved covers, logos, and photos, uploads each one to storage, and replaces it with a link. It can take a minute for a lot of images. Continue?')) return;
+  toast('Scanning for embedded images — this may take a bit...');
+  let count = 0, failed = 0;
+
+  async function migrateOneDataUri(dataUri){
+    try{
+      const res = await fetch(dataUri);
+      const blob = await res.blob();
+      const ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await sb.storage.from('srffl-images').upload(path, blob, { upsert: false, contentType: blob.type });
+      if(error) throw error;
+      const { data: urlData } = sb.storage.from('srffl-images').getPublicUrl(path);
+      count++;
+      return urlData.publicUrl;
+    }catch(e){
+      failed++;
+      return dataUri;
+    }
+  }
+
+  async function walk(obj){
+    if(!obj || typeof obj !== 'object') return;
+    const keys = Array.isArray(obj) ? obj.map((_, i)=> i) : Object.keys(obj);
+    for(const key of keys){
+      const val = obj[key];
+      if(typeof val === 'string' && val.startsWith('data:image')){
+        obj[key] = await migrateOneDataUri(val);
+      } else if(val && typeof val === 'object'){
+        await walk(val);
+      }
+    }
+  }
+
+  await walk(data);
+  await saveData();
+  toast(`Done — moved ${count} image(s) to storage${failed ? `, ${failed} failed and were left as-is` : ''}.`);
 }
 
 
@@ -1072,21 +1147,11 @@ function renderDigestPageContent(entry, page){
     `;
     if(editMode){
       document.getElementById('coverFrame').addEventListener('click', ()=>{
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*';
-        input.onchange = ()=>{
-          const file = input.files[0];
-          if(!file) return;
-          const reader = new FileReader();
-          reader.onload = ()=>{
-            entry.cover = reader.result;
-            saveData();
-            renderDigest();
-          };
-          reader.onerror = ()=> toast('Could not read that image.');
-          reader.readAsDataURL(file);
-        };
-        input.click();
+        pickAndUploadImage((url)=>{
+          entry.cover = url;
+          saveData();
+          renderDigest();
+        });
       });
     }
   } else if(page.kind === 'empty-preview'){
@@ -1203,21 +1268,12 @@ function wireMatchupCardEvents(root, entry){
   root.querySelectorAll('[data-logo]').forEach(el=>{
     if(!editMode) return;
     el.addEventListener('click', ()=>{
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = ()=>{
-        const file = input.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = ()=>{
-          const m = findMatchup(entry, el.dataset.mid);
-          (el.dataset.side === 'A' ? m.teamA : m.teamB).logo = reader.result;
-          saveData();
-          renderDigest();
-        };
-        reader.readAsDataURL(file);
-      };
-      input.click();
+      pickAndUploadImage((url)=>{
+        const m = findMatchup(entry, el.dataset.mid);
+        (el.dataset.side === 'A' ? m.teamA : m.teamB).logo = url;
+        saveData();
+        renderDigest();
+      });
     });
   });
   root.querySelectorAll('.check-btn').forEach(btn=>{
@@ -1335,40 +1391,22 @@ function wireTeamPageEvents(root, entry, ownerId){
   const logoEl = root.querySelector('[data-team-logo]');
   if(logoEl && editMode){
     logoEl.addEventListener('click', ()=>{
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = ()=>{
-        const file = input.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = ()=>{
-          tp.logo = reader.result;
-          saveData();
-          renderDigest();
-        };
-        reader.readAsDataURL(file);
-      };
-      input.click();
+      pickAndUploadImage((url)=>{
+        tp.logo = url;
+        saveData();
+        renderDigest();
+      });
     });
   }
   if(editMode){
     root.querySelectorAll('[data-kp-photo]').forEach(el=>{
       el.addEventListener('click', ()=>{
         const idx = Number(el.dataset.kpPhoto.split(':')[1]);
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*';
-        input.onchange = ()=>{
-          const file = input.files[0];
-          if(!file) return;
-          const reader = new FileReader();
-          reader.onload = ()=>{
-            tp.keyPlayers[idx].photo = reader.result;
-            saveData();
-            renderDigest();
-          };
-          reader.readAsDataURL(file);
-        };
-        input.click();
+        pickAndUploadImage((url)=>{
+          tp.keyPlayers[idx].photo = url;
+          saveData();
+          renderDigest();
+        });
       });
     });
   }
@@ -1458,20 +1496,11 @@ function renderBracketPrediction(container, entry){
     container.querySelectorAll('[data-bracket-slot]').forEach(el=>{
       el.addEventListener('click', ()=>{
         const key = el.dataset.bracketSlot;
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*';
-        input.onchange = ()=>{
-          const file = input.files[0];
-          if(!file) return;
-          const reader = new FileReader();
-          reader.onload = ()=>{
-            pred[key] = reader.result;
-            saveData();
-            renderDigest();
-          };
-          reader.readAsDataURL(file);
-        };
-        input.click();
+        pickAndUploadImage((url)=>{
+          pred[key] = url;
+          saveData();
+          renderDigest();
+        });
       });
     });
   }
@@ -2734,8 +2763,11 @@ document.getElementById('editToggle').addEventListener('click', ()=>{
   btn.textContent = 'Edit mode: ' + (editMode ? 'On' : 'Off');
   btn.classList.toggle('btn-primary', editMode);
   document.getElementById('changePinBtn').style.display = editMode ? 'inline-block' : 'none';
+  document.getElementById('fixImagesBtn').style.display = editMode ? 'inline-block' : 'none';
   refreshAllPanels();
 });
+
+document.getElementById('fixImagesBtn').addEventListener('click', migrateBase64ImagesToStorage);
 
 document.getElementById('changePinBtn').addEventListener('click', ()=>{
   const current = prompt('Enter current PIN:');
