@@ -517,7 +517,11 @@
   </section>
 
   <section class="panel" id="panel-tradesim">
-    <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then get an instant read based on season points-per-game and roster needs — no AI, no waiting.</p>
+    <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then get an instant read based on season points-per-game and roster needs — no AI, no waiting. Values are discounted for players who wouldn't crack your starting lineup, based on the starting lineup set below.</p>
+    <div class="digest-add-row" id="lineupSettingsRow" style="display:none;">
+      <button class="btn small" id="editLineupBtn">Edit starting lineup</button>
+    </div>
+    <div id="lineupSettingsForm" class="card" style="display:none; max-width:520px; margin:0 auto 1.2rem; padding:1rem;"></div>
     <div class="trade-teams-select">
       <div>Team A <select id="tradeTeamA"></select></div>
       <div>Team B <select id="tradeTeamB"></select></div>
@@ -592,7 +596,8 @@ function defaultData(){
     pin: null,
     schedule: {},
     transactions: {},
-    statBaselines: {}
+    statBaselines: {},
+    lineupSlots: [['QB'],['RB'],['RB','WR'],['WR','TE'],['WR','TE'],['TE'],['DEF'],['K']]
   };
 }
 
@@ -614,6 +619,9 @@ async function loadData(){
   if(!data.schedule) data.schedule = {};
   if(!data.transactions) data.transactions = {};
   if(!data.statBaselines) data.statBaselines = {};
+  if(!data.lineupSlots || !Array.isArray(data.lineupSlots) || data.lineupSlots.length === 0){
+    data.lineupSlots = [['QB'],['RB'],['RB','WR'],['WR','TE'],['WR','TE'],['TE'],['DEF'],['K']];
+  }
   currentSeason = data.seasons[data.seasons.length-1];
   currentDigestYear = data.currentDigest ? data.currentDigest.year : DIGEST_YEARS[DIGEST_YEARS.length-1];
   currentDigestWeek = data.currentDigest ? data.currentDigest.week : '1A';
@@ -2681,6 +2689,64 @@ function renderGameDetail(){
 
 let tradeSelections = { A: new Set(), B: new Set() };
 
+function updateLineupSettingsVisibility(){
+  document.getElementById('lineupSettingsRow').style.display = editMode ? 'flex' : 'none';
+  if(!editMode) document.getElementById('lineupSettingsForm').style.display = 'none';
+}
+
+function renderLineupForm(){
+  const box = document.getElementById('lineupSettingsForm');
+  const slots = ensureLineupSlots();
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0;">Check every position each slot can start. A slot with two boxes checked is a flex — the trade tool will figure out the best combination itself.</p>
+    <div style="display:flex; flex-direction:column; gap:.6rem;">
+      ${slots.map((slot, i)=>`
+        <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:.5rem;">
+          <span class="hint" style="margin:0; width:16px;">${i+1}.</span>
+          ${ALL_LINEUP_POSITIONS.map(pos=>`
+            <label style="display:flex; align-items:center; gap:.2rem; font-size:.78rem;">
+              <input type="checkbox" class="lineup-slot-pos" data-slot="${i}" data-pos="${pos}" ${slot.includes(pos) ? 'checked' : ''}>
+              ${pos}
+            </label>
+          `).join('')}
+          <button class="btn-danger btn small" data-remove-slot="${i}" style="margin-left:auto;">Remove</button>
+        </div>
+      `).join('')}
+      <div style="display:flex; gap:.5rem;">
+        <button class="btn small" id="addLineupSlotBtn">+ Add slot</button>
+        <button class="btn btn-primary small" id="saveLineupBtn">Save lineup</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('addLineupSlotBtn').addEventListener('click', ()=>{
+    slots.push([]);
+    renderLineupForm();
+  });
+  box.querySelectorAll('[data-remove-slot]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      slots.splice(Number(btn.dataset.removeSlot), 1);
+      renderLineupForm();
+    });
+  });
+  document.getElementById('saveLineupBtn').addEventListener('click', ()=>{
+    const newSlots = slots
+      .map((_, i)=> [...box.querySelectorAll(`.lineup-slot-pos[data-slot="${i}"]:checked`)].map(cb=> cb.dataset.pos))
+      .filter(s=> s.length > 0);
+    if(newSlots.length === 0){ toast('Add at least one slot with a position checked'); return; }
+    data.lineupSlots = newSlots;
+    saveData();
+    toast('Starting lineup saved');
+    box.style.display = 'none';
+  });
+}
+
+document.getElementById('editLineupBtn').addEventListener('click', ()=>{
+  const box = document.getElementById('lineupSettingsForm');
+  const showing = box.style.display !== 'none';
+  if(showing){ box.style.display = 'none'; }
+  else{ renderLineupForm(); box.style.display = 'block'; }
+});
+
 function renderTradeTeamSelects(){
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
@@ -2742,6 +2808,58 @@ function playerValue(p){
   return null;
 }
 
+const ALL_LINEUP_POSITIONS = ['QB','RB','WR','TE','DEF','K'];
+
+function ensureLineupSlots(){
+  if(!data.lineupSlots || !Array.isArray(data.lineupSlots) || data.lineupSlots.length === 0){
+    data.lineupSlots = [['QB'],['RB'],['RB','WR'],['WR','TE'],['WR','TE'],['TE'],['DEF'],['K']];
+  }
+  return data.lineupSlots;
+}
+
+// Finds the highest-total-value assignment of roster players into lineup slots,
+// respecting each slot's eligible positions (so flex slots like RB/WR or WR/TE
+// get filled by whichever combination maximizes total starter value).
+function computeStarterSet(roster){
+  const slots = ensureLineupSlots();
+  const players = roster
+    .map(p=>({ p, pos: normalizePos(p.pos), val: playerValue(p) }))
+    .filter(x=> x.val !== null);
+
+  const order = slots.map((_, i)=> i).sort((a,b)=> slots[a].length - slots[b].length);
+
+  let bestTotal = -1;
+  let bestUsed = null;
+
+  function backtrack(orderIdx, usedIdxs, total){
+    if(orderIdx === order.length){
+      if(total > bestTotal){ bestTotal = total; bestUsed = new Set(usedIdxs); }
+      return;
+    }
+    const eligible = slots[order[orderIdx]];
+    players.forEach((cand, idx)=>{
+      if(usedIdxs.has(idx)) return;
+      if(!eligible.includes(cand.pos)) return;
+      usedIdxs.add(idx);
+      backtrack(orderIdx + 1, usedIdxs, total + cand.val);
+      usedIdxs.delete(idx);
+    });
+    // also try leaving this slot unfilled, in case the roster is short-handed
+    backtrack(orderIdx + 1, usedIdxs, total);
+  }
+  backtrack(0, new Set(), 0);
+
+  const starters = new Set();
+  (bestUsed || new Set()).forEach(idx=> starters.add(players[idx].p));
+  return starters;
+}
+
+function depthAdjustedValue(player, starterSet){
+  const raw = playerValue(player);
+  if(raw === null) return null;
+  return starterSet.has(player) ? raw : raw * 0.5;
+}
+
 function teamPositionCounts(roster){
   const counts = {};
   roster.forEach(p=>{
@@ -2764,14 +2882,21 @@ function positionalNeedNote(sentAway, received, myCounts){
 }
 
 function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
-  const valA = sendA.map(playerValue);
-  const valB = sendB.map(playerValue);
-  const knownA = valA.filter(v=> v !== null);
-  const knownB = valB.filter(v=> v !== null);
-  const missingA = valA.length - knownA.length;
-  const missingB = valB.length - knownB.length;
+  const starterSetA = computeStarterSet(rosterA);
+  const starterSetB = computeStarterSet(rosterB);
+  const rawA = sendA.map(playerValue);
+  const rawB = sendB.map(playerValue);
+  const adjA = sendA.map(p=> depthAdjustedValue(p, starterSetA));
+  const adjB = sendB.map(p=> depthAdjustedValue(p, starterSetB));
+  const knownA = adjA.filter(v=> v !== null);
+  const knownB = adjB.filter(v=> v !== null);
+  const missingA = adjA.length - knownA.length;
+  const missingB = adjB.length - knownB.length;
   const sumA = knownA.reduce((s,v)=> s+v, 0);
   const sumB = knownB.reduce((s,v)=> s+v, 0);
+  const rawSumA = rawA.filter(v=>v!==null).reduce((s,v)=>s+v,0);
+  const rawSumB = rawB.filter(v=>v!==null).reduce((s,v)=>s+v,0);
+  const anyDiscounted = adjA.some((v,i)=> v !== null && v !== rawA[i]) || adjB.some((v,i)=> v !== null && v !== rawB[i]);
 
   let verdict, summary;
   if(knownA.length === 0 && knownB.length === 0){
@@ -2783,13 +2908,16 @@ function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
     const pct = Math.abs(diff) / total;
     if(pct < 0.12){
       verdict = 'Fair trade';
-      summary = `Roughly even value — ${nameA} sends ~${sumA.toFixed(1)} combined PPG, ${nameB} sends ~${sumB.toFixed(1)} combined PPG.`;
+      summary = `Roughly even value once roster context is factored in — ${nameA} sends ~${sumA.toFixed(1)} adjusted PPG, ${nameB} sends ~${sumB.toFixed(1)} adjusted PPG.`;
     } else if(diff > 0){
       verdict = `Good for ${nameA}`;
-      summary = `${nameA} is taking on more season-long production than they're giving up (~${sumB.toFixed(1)} PPG in vs ~${sumA.toFixed(1)} PPG out).`;
+      summary = `${nameA} is taking on more real lineup value than they're giving up (~${sumB.toFixed(1)} adjusted PPG in vs ~${sumA.toFixed(1)} out).`;
     } else {
       verdict = `Good for ${nameB}`;
-      summary = `${nameB} is taking on more season-long production than they're giving up (~${sumA.toFixed(1)} PPG in vs ~${sumB.toFixed(1)} PPG out).`;
+      summary = `${nameB} is taking on more real lineup value than they're giving up (~${sumA.toFixed(1)} adjusted PPG in vs ~${sumB.toFixed(1)} out).`;
+    }
+    if(anyDiscounted){
+      summary += ` (Raw PPG was ${rawSumA.toFixed(1)} vs ${rawSumB.toFixed(1)} — adjusted down for players buried on the bench behind teammates at the same position.)`;
     }
   }
 
@@ -2807,6 +2935,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   const countsA = teamPositionCounts(rosterA);
   const countsB = teamPositionCounts(rosterB);
   const positions = [...new Set([...rosterA, ...rosterB].map(p=> normalizePos(p.pos)))];
+  const starterSetA = computeStarterSet(rosterA);
+  const starterSetB = computeStarterSet(rosterB);
 
   const aSurplus = positions.filter(pos=> (countsA[pos] || 0) - (countsB[pos] || 0) >= 2);
   const bSurplus = positions.filter(pos=> (countsB[pos] || 0) - (countsA[pos] || 0) >= 2);
@@ -2816,15 +2946,15 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     bSurplus.forEach(posB=>{
       if(posA === posB) return;
       const aCandidates = rosterA.filter(p=> normalizePos(p.pos) === posA)
-        .map(p=>({ p, val: playerValue(p) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
+        .map(p=>({ p, val: depthAdjustedValue(p, starterSetA) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
       const bCandidates = rosterB.filter(p=> normalizePos(p.pos) === posB)
-        .map(p=>({ p, val: playerValue(p) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
+        .map(p=>({ p, val: depthAdjustedValue(p, starterSetB) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
       if(aCandidates.length && bCandidates.length){
         const aPick = aCandidates[0], bPick = bCandidates[0];
         suggestions.push({
           aSends: [aPick.p.name],
           bSends: [bPick.p.name],
-          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Values are close (${aPick.val.toFixed(1)} vs ${bPick.val.toFixed(1)} PPG).`
+          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Adjusted values are close (${aPick.val.toFixed(1)} vs ${bPick.val.toFixed(1)} PPG).`
         });
       }
     });
@@ -2926,6 +3056,7 @@ document.getElementById('tabs').addEventListener('click', (e)=>{
   if(btn.dataset.tab === 'tradesim'){
     renderTradeTeamSelects();
     renderTradeBuilder();
+    updateLineupSettingsVisibility();
   }
 });
 
@@ -2971,6 +3102,7 @@ async function refreshAllPanels(){
     renderScheduleList();
   }
   renderTxnList();
+  updateLineupSettingsVisibility();
 }
 
 document.getElementById('editToggle').addEventListener('click', ()=>{
