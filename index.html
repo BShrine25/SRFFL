@@ -278,6 +278,7 @@
   .playoff-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:3px solid var(--mustard); border-bottom:3px solid var(--mustard); }
 
   /* Power Rankings + chart */
+  #prChartRoot, #reviewChartRoot{ min-height:180px; }
   .pr-chart-legend{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:center; margin-top:.6rem; font-size:.72rem; color:var(--ink-soft); }
   .pr-chart-legend span{ display:inline-flex; align-items:center; gap:.3rem; }
   .pr-chart-swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
@@ -1758,24 +1759,18 @@ function normalizePos(pos){
   return 'OTHER';
 }
 
+const OFFENSIVE_FIELDS = [
+  { k:'py', l:'Pass Yds' }, { k:'ptd', l:'Pass TD' }, { k:'int', l:'INT' }, { k:'pass2pt', l:'2pt Pass' },
+  { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' },
+  { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
+  { k:'fuml', l:'Fum Lost' }
+];
+
 const POSITION_FIELDS = {
-  QB: [
-    { k:'py', l:'Pass Yds' }, { k:'ptd', l:'Pass TD' }, { k:'int', l:'INT' }, { k:'pass2pt', l:'2pt Pass' },
-    { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' }, { k:'fuml', l:'Fum Lost' }
-  ],
-  RB: [
-    { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' },
-    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
-    { k:'fuml', l:'Fum Lost' }
-  ],
-  WR: [
-    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
-    { k:'fuml', l:'Fum Lost' }
-  ],
-  TE: [
-    { k:'rey', l:'Rec Yds' }, { k:'rec', l:'Rec' }, { k:'retd', l:'Rec TD' }, { k:'rec2pt', l:'2pt Rec' },
-    { k:'fuml', l:'Fum Lost' }
-  ],
+  QB: OFFENSIVE_FIELDS,
+  RB: OFFENSIVE_FIELDS,
+  WR: OFFENSIVE_FIELDS,
+  TE: OFFENSIVE_FIELDS,
   DEF: [
     { k:'sk', l:'Sacks' }, { k:'dint', l:'INT' }, { k:'fr', l:'Fum Rec' }, { k:'ff', l:'Fum Forced' },
     { k:'sf', l:'Safety' }, { k:'defTD', l:'Def/ST TD' }, { k:'blkk', l:'Blocked Kick' },
@@ -1808,23 +1803,25 @@ function pointsAllowedBracket(pa){
   return -20;
 }
 
+function offensiveSkillPoints(n){
+  return n('py')*0.05 + yardageBonus(n('py'), [[300,1],[400,5]])
+    + n('ptd')*6 + n('int')*-2 + n('pass2pt')*2
+    + n('ry')*0.1 + yardageBonus(n('ry'), [[100,5],[200,10]])
+    + n('rtd')*6 + n('rush2pt')*2
+    + n('rey')*0.1 + yardageBonus(n('rey'), [[100,3],[200,5]])
+    + n('rec')*0.5 + n('retd')*6 + n('rec2pt')*2
+    + n('fuml')*-2;
+}
+
 function computeFantasyPoints(normPos, raw){
   const r = raw || {};
   const n = (k)=> Number(r[k]) || 0;
   switch(normPos){
     case 'QB':
-      return n('py')*0.05 + yardageBonus(n('py'), [[300,1],[400,5]])
-        + n('ptd')*6 + n('int')*-2 + n('pass2pt')*2
-        + n('ry')*0.1 + yardageBonus(n('ry'), [[100,5],[200,10]])
-        + n('rtd')*6 + n('rush2pt')*2 + n('fuml')*-2;
     case 'RB':
-      return n('ry')*0.1 + yardageBonus(n('ry'), [[100,5],[200,10]]) + n('rtd')*6 + n('rush2pt')*2
-        + n('rey')*0.1 + yardageBonus(n('rey'), [[100,3],[200,5]]) + n('rec')*0.5 + n('retd')*6 + n('rec2pt')*2
-        + n('fuml')*-2;
     case 'WR':
     case 'TE':
-      return n('rey')*0.1 + yardageBonus(n('rey'), [[100,3],[200,5]]) + n('rec')*0.5 + n('retd')*6 + n('rec2pt')*2
-        + n('fuml')*-2;
+      return offensiveSkillPoints(n);
     case 'DEF':
       return n('sk')*1 + n('dint')*2 + n('fr')*1 + n('ff')*1 + n('sf')*3 + n('defTD')*6 + n('blkk')*2
         + pointsAllowedBracket(r.pa === undefined || r.pa === '' ? null : Number(r.pa))
@@ -2649,7 +2646,10 @@ function renderPowerTrendChart(container, year, throughWeek){
     const polyline = s.values.length > 1
       ? `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" opacity="0.9"/>`
       : '';
-    const dots = s.values.map((v,i)=> `<circle cx="${xFor(i)}" cy="${yFor(v)}" r="4" fill="${s.color}"/>`).join('');
+    const dots = s.values.map((v,i)=>
+      `<circle cx="${xFor(i)}" cy="${yFor(v)}" r="4" fill="${s.color}" stroke="#fff" stroke-width="1"/>` +
+      (weeks.length === 1 ? `<text x="${xFor(i)+8}" y="${yFor(v)+3}" font-size="9" fill="${s.color}">${s.owner.team || s.owner.name}</text>` : '')
+    ).join('');
     return polyline + dots;
   }).join('');
 
@@ -2657,7 +2657,7 @@ function renderPowerTrendChart(container, year, throughWeek){
   const yTicks = [minV, (minV+maxV)/2, maxV].map(v=> `<text x="${padLeft-6}" y="${yFor(v)+3}" font-size="10" fill="#5b5847" text-anchor="end">${v.toFixed(0)}</text>`).join('');
 
   container.innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block; min-height:180px;">
       <line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${h-padBottom}" stroke="#D9D1B8"/>
       <line x1="${padLeft}" y1="${h-padBottom}" x2="${w-padRight}" y2="${h-padBottom}" stroke="#D9D1B8"/>
       ${yTicks}
