@@ -259,10 +259,14 @@
   .schedule-toolbar{ display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
   .schedule-week-group{ margin-bottom:1.1rem; }
   .schedule-week-group h4{ font-size:.72rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; margin:0 0 .4rem; }
-  .game-row{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; cursor:pointer; font-size:.86rem; }
+  .game-row{ display:block; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.6rem .9rem; margin-bottom:.5rem; cursor:pointer; }
   .game-row:hover{ border-color:var(--mustard); }
-  .game-row .score{ font-weight:700; white-space:nowrap; }
-  .game-row .status{ font-size:.66rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .game-row .status{ display:block; text-align:right; font-size:.64rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; margin-top:.2rem; }
+  .game-team-line{ display:flex; align-items:center; gap:.55rem; padding:.15rem 0; min-width:0; }
+  .game-score{ font-family:'Anton',sans-serif; font-size:1.25rem; min-width:60px; text-align:right; color:var(--ink); flex-shrink:0; }
+  .game-score.winner{ color:var(--field); }
+  .game-score.loser{ color:var(--ink-soft); }
+  .game-team-name{ font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
   .game-detail-header{ text-align:center; margin-bottom:1rem; }
   .game-detail-score{ display:flex; align-items:center; justify-content:center; gap:1rem; font-family:'Anton',sans-serif; font-size:1.5rem; margin:.6rem 0 1.2rem; }
   .game-detail-score input{ width:64px; text-align:center; font-family:'Anton',sans-serif; font-size:1.4rem; border:1px solid var(--line); border-radius:4px; padding:.2rem; color:var(--ink); background:#fff; }
@@ -282,9 +286,8 @@
   .review-report{ max-width:640px; margin:0 auto; }
   .review-report h3{ font-size:.95rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.3rem; margin:1.3rem 0 .6rem; }
   .review-report h3:first-child{ margin-top:0; }
-  .review-scores-list{ display:flex; flex-direction:column; gap:.4rem; }
-  .review-score-row{ display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.5rem .8rem; font-size:.85rem; }
-  .review-score-row .score{ font-family:'Anton',sans-serif; }
+  .review-scores-list{ display:flex; flex-direction:column; gap:.5rem; }
+  .review-score-row{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.55rem .8rem; }
   .review-table td.legend{ font-size:.68rem; color:var(--ink-soft); }
   .review-legend-note{ font-size:.7rem; color:var(--ink-soft); margin-top:.3rem; }
 
@@ -1294,21 +1297,34 @@ function renderWeeklyReviewReport(entry){
     `).join('');
   }
 
+  function gameLine(g, side){
+    const ownerId = side === 'home' ? g.homeId : g.awayId;
+    const other = side === 'home' ? g.awayScore : g.homeScore;
+    const mine = side === 'home' ? g.homeScore : g.awayScore;
+    const owner = data.owners.find(o=>o.id === ownerId);
+    const name = owner ? (owner.team || owner.name) : '—';
+    const played = isPlayed(g);
+    const won = played && mine > other;
+    const lost = played && mine < other;
+    return `
+      <div class="game-team-line">
+        <span class="game-score ${won?'winner':''} ${lost?'loser':''}">${played ? mine.toFixed(2) : '–'}</span>
+        ${teamLogoHTML(ownerId, year)}
+        <span class="game-team-name">${name}</span>
+      </div>
+    `;
+  }
+
   return `
     <div class="review-report">
       <h3>Week ${week} Scores</h3>
       <div class="review-scores-list">
-        ${games.length ? games.map(g=>{
-          const home = data.owners.find(o=>o.id === g.homeId);
-          const away = data.owners.find(o=>o.id === g.awayId);
-          return `
-            <div class="review-score-row">
-              <span>${home ? (home.team || home.name) : '—'}</span>
-              <span class="score">${isPlayed(g) ? g.homeScore.toFixed(2) : '—'} – ${isPlayed(g) ? g.awayScore.toFixed(2) : '—'}</span>
-              <span>${away ? (away.team || away.name) : '—'}</span>
-            </div>
-          `;
-        }).join('') : `<div class="empty">No games logged for Week ${week} yet.</div>`}
+        ${games.length ? games.map(g=>`
+          <div class="review-score-row">
+            ${gameLine(g, 'home')}
+            ${gameLine(g, 'away')}
+          </div>
+        `).join('') : `<div class="empty">No games logged for Week ${week} yet.</div>`}
       </div>
 
       <h3>Recap</h3>
@@ -2731,12 +2747,29 @@ function renderScheduleList(){
   const byWeek = {};
   games.forEach(g=>{ (byWeek[g.week] = byWeek[g.week] || []).push(g); });
 
+  function scheduleGameLine(g, side){
+    const ownerId = side === 'home' ? g.homeId : g.awayId;
+    const other = side === 'home' ? g.awayScore : g.homeScore;
+    const mine = side === 'home' ? g.homeScore : g.awayScore;
+    const played = isPlayed(g);
+    const won = played && mine > other;
+    const lost = played && mine < other;
+    return `
+      <div class="game-team-line">
+        <span class="game-score ${won?'winner':''} ${lost?'loser':''}">${played ? mine.toFixed(2) : '–'}</span>
+        ${teamLogoHTML(ownerId, currentSeason)}
+        <span class="game-team-name">${teamLabel(ownerId)}</span>
+      </div>
+    `;
+  }
+
   listRoot.innerHTML = Object.keys(byWeek).sort((a,b)=>a-b).map(week=>`
     <div class="schedule-week-group">
       <h4>Week ${week}</h4>
       ${byWeek[week].map(g=>`
         <div class="game-row" data-game="${g.id}">
-          <span>${teamLabel(g.homeId)} <span class="score">${isPlayed(g) ? g.homeScore : ''}</span> vs <span class="score">${isPlayed(g) ? g.awayScore : ''}</span> ${teamLabel(g.awayId)}</span>
+          ${scheduleGameLine(g, 'home')}
+          ${scheduleGameLine(g, 'away')}
           <span class="status">${isPlayed(g) ? 'Final' : 'Not played'}${g.locked ? ' 🔒' : ''}</span>
         </div>
       `).join('')}
