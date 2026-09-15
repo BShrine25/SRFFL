@@ -2646,7 +2646,11 @@ function renderPowerTrendChart(container, year, throughWeek){
 
   const lines = series.map(s=>{
     const pts = s.values.map((v,i)=> `${xFor(i)},${yFor(v)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" opacity="0.9"/>`;
+    const polyline = s.values.length > 1
+      ? `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" opacity="0.9"/>`
+      : '';
+    const dots = s.values.map((v,i)=> `<circle cx="${xFor(i)}" cy="${yFor(v)}" r="4" fill="${s.color}"/>`).join('');
+    return polyline + dots;
   }).join('');
 
   const xLabels = weeks.map((wk,i)=> `<text x="${xFor(i)}" y="${h-6}" font-size="10" fill="#5b5847" text-anchor="middle">W${wk}</text>`).join('');
