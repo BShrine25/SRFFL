@@ -273,6 +273,21 @@
   /* Standings */
   .playoff-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:3px solid var(--mustard); border-bottom:3px solid var(--mustard); }
 
+  /* Power Rankings + chart */
+  .pr-chart-legend{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:center; margin-top:.6rem; font-size:.72rem; color:var(--ink-soft); }
+  .pr-chart-legend span{ display:inline-flex; align-items:center; gap:.3rem; }
+  .pr-chart-swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+
+  /* Weekly review report */
+  .review-report{ max-width:640px; margin:0 auto; }
+  .review-report h3{ font-size:.95rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.3rem; margin:1.3rem 0 .6rem; }
+  .review-report h3:first-child{ margin-top:0; }
+  .review-scores-list{ display:flex; flex-direction:column; gap:.4rem; }
+  .review-score-row{ display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.5rem .8rem; font-size:.85rem; }
+  .review-score-row .score{ font-family:'Anton',sans-serif; }
+  .review-table td.legend{ font-size:.68rem; color:var(--ink-soft); }
+  .review-legend-note{ font-size:.7rem; color:var(--ink-soft); margin-top:.3rem; }
+
   /* Playoff bracket (shared by Standings tab and Digest) */
   .bracket-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.8rem; align-items:center; max-width:640px; margin:0 auto; }
   @media (max-width:700px){ .bracket-grid{ grid-template-columns:1fr; } }
@@ -382,6 +397,7 @@
     <button class="tab" data-tab="records">Record Book</button>
     <button class="tab" data-tab="digest">SRFFL Digest</button>
     <button class="tab" data-tab="tradesim">Trade Sim</button>
+    <button class="tab" data-tab="powerrankings">Power Rankings</button>
   </nav>
 </header>
 
@@ -532,6 +548,22 @@
       <button class="btn" id="suggestTradesBtn">Suggest trades between these teams</button>
     </div>
     <div id="tradeResult"></div>
+  </section>
+
+  <section class="panel" id="panel-powerrankings">
+    <div class="digest-toolbar">
+      <span>Week</span>
+      <select id="prWeekSelect"></select>
+    </div>
+    <p class="hint">Composite score from three categories — Record, Points For, and Breakdown (your all-play record: how you'd have done against every team that week, not just your opponent). Each category is ranked and awarded points (top team gets one point per team, e.g. 12 for a 12-team league, down to 1) — ties split the points evenly. Cumulative through the selected week.</p>
+    <div class="card" style="overflow-x:auto;">
+      <table id="prTable">
+        <thead><tr><th>#</th><th>Team</th><th class="num">Record</th><th class="num">PF</th><th class="num">Breakdown</th><th class="num">Pwr</th></tr></thead>
+        <tbody id="prTableBody"></tbody>
+      </table>
+    </div>
+    <h2 class="section-title" style="margin-top:1.4rem;">Week-to-Week Movement</h2>
+    <div id="prChartRoot"></div>
   </section>
 
   <section class="panel" id="panel-soon">
@@ -1235,20 +1267,90 @@ function renderDigestPageContent(entry, page, containerId){
     root.innerHTML = bracketPageHTML(entry);
     wireBracketPageEvents(root, entry);
   } else if(page.kind === 'reviewtext'){
-    root.innerHTML = `
-      <div class="digest-article">
-        <h3>Weekly Review</h3>
-        <div class="body-text editable-field" id="reviewText" data-placeholder="Nothing written yet." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
+    root.innerHTML = renderWeeklyReviewReport(entry);
+    wireWeeklyReviewEvents(root, entry);
+  }
+  fixEditableContrast();
+}
+
+function renderWeeklyReviewReport(entry){
+  const week = parseInt(currentDigestWeek, 10) || 1;
+  const year = currentDigestYear;
+  const games = (data.schedule[year] || []).filter(g=> g.week === week);
+  const standings = orderedStandings(year, week);
+  const top8 = standings.slice(0, 8);
+  const rest = standings.slice(8);
+  const eliminated = data.owners.length >= 8 ? computeEliminations(year, week) : [];
+  const pr = data.owners.length ? computePowerRankings(year, week) : [];
+
+  function standingsRows(rows, offset){
+    return rows.map((r,i)=>`
+      <tr>
+        <td>${offset + i + 1}</td>
+        <td>${r.owner.team || r.owner.name}</td>
+        <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''}</td>
+        <td class="num">${r.rec.pf.toFixed(2)}</td>
+      </tr>
+    `).join('');
+  }
+
+  return `
+    <div class="review-report">
+      <h3>Week ${week} Scores</h3>
+      <div class="review-scores-list">
+        ${games.length ? games.map(g=>{
+          const home = data.owners.find(o=>o.id === g.homeId);
+          const away = data.owners.find(o=>o.id === g.awayId);
+          return `
+            <div class="review-score-row">
+              <span>${home ? (home.team || home.name) : '—'}</span>
+              <span class="score">${isPlayed(g) ? g.homeScore.toFixed(2) : '—'} – ${isPlayed(g) ? g.awayScore.toFixed(2) : '—'}</span>
+              <span>${away ? (away.team || away.name) : '—'}</span>
+            </div>
+          `;
+        }).join('') : `<div class="empty">No games logged for Week ${week} yet.</div>`}
       </div>
-    `;
-    if(editMode){
-      document.getElementById('reviewText').addEventListener('blur', (e)=>{
+
+      <h3>Recap</h3>
+      <div class="body-text editable-field" id="reviewText" data-placeholder="Write this week's recap..." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
+
+      <h3>Playoff Standings</h3>
+      <div class="card"><table class="review-table"><thead><tr><th>#</th><th>Team</th><th class="num">Record</th><th class="num">PF</th></tr></thead>
+      <tbody>${top8.length ? standingsRows(top8, 0) : `<tr><td colspan="4" style="color:var(--ink-soft); font-size:.8rem;">Add teams and scores first</td></tr>`}</tbody></table></div>
+
+      <h3>Outside Looking In</h3>
+      <div class="card"><table class="review-table"><thead><tr><th>#</th><th>Team</th><th class="num">Record</th><th class="num">PF</th></tr></thead>
+      <tbody>${rest.length ? standingsRows(rest, 8) : `<tr><td colspan="4" style="color:var(--ink-soft); font-size:.8rem;">Fewer than 9 teams</td></tr>`}</tbody></table></div>
+      <p class="review-legend-note">x - clinched playoff berth · y - clinched division/bye · z - clinched home field</p>
+
+      <h3>Power Rankings</h3>
+      <div class="card" style="overflow-x:auto;"><table class="review-table"><thead><tr><th>#</th><th>Team</th><th class="num">Pwr</th></tr></thead>
+      <tbody>${pr.length ? pr.map((r,i)=>`<tr><td>${i+1}</td><td>${r.owner.team || r.owner.name}</td><td class="num">${r.composite.toFixed(1)} pts</td></tr>`).join('') : `<tr><td colspan="3" style="color:var(--ink-soft); font-size:.8rem;">No teams yet</td></tr>`}</tbody></table></div>
+
+      <h3>Playoff Scenarios</h3>
+      <p>N/A</p>
+
+      <h3>Possible Eliminations</h3>
+      <p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>
+
+      <h3>Week-to-Week Movement</h3>
+      <div id="reviewChartRoot"></div>
+    </div>
+  `;
+}
+
+function wireWeeklyReviewEvents(root, entry){
+  if(editMode){
+    const reviewEl = document.getElementById('reviewText');
+    if(reviewEl){
+      reviewEl.addEventListener('blur', (e)=>{
         entry.review = e.target.textContent;
         saveData();
       });
     }
   }
-  fixEditableContrast();
+  const week = parseInt(currentDigestWeek, 10) || 1;
+  renderPowerTrendChart(document.getElementById('reviewChartRoot'), currentDigestYear, week);
 }
 
 function matchupCardHTML(m, isGotw){
@@ -2111,10 +2213,10 @@ function renderStats(){
 
 /* ---------- Standings ---------- */
 
-function computeStandings(year){
+function computeStandings(year, throughWeek){
   const table = {};
   data.owners.forEach(o=>{ table[o.id] = { wins:0, losses:0, ties:0, pf:0, pa:0 }; });
-  const games = (data.schedule[year] || []).filter(isPlayed);
+  const games = (data.schedule[year] || []).filter(g=> isPlayed(g) && (throughWeek == null || g.week <= throughWeek));
   games.forEach(g=>{
     if(!table[g.homeId] || !table[g.awayId]) return;
     table[g.homeId].pf += g.homeScore; table[g.homeId].pa += g.awayScore;
@@ -2149,9 +2251,9 @@ function tiebreakGroup(group, games, table){
   });
 }
 
-function orderedStandings(year){
-  const table = computeStandings(year);
-  const games = (data.schedule[year] || []).filter(isPlayed);
+function orderedStandings(year, throughWeek){
+  const table = computeStandings(year, throughWeek);
+  const games = (data.schedule[year] || []).filter(g=> isPlayed(g) && (throughWeek == null || g.week <= throughWeek));
   const groups = {};
   data.owners.forEach(o=>{
     const rec = table[o.id];
@@ -2393,7 +2495,191 @@ document.getElementById('importStatsInput').addEventListener('change', (e)=>{
   if(file) importStatsCSV(file);
 });
 
-/* ---------- Schedule ---------- */
+/* ---------- Power Rankings ---------- */
+
+// Assigns points 1..n (n = best) for a set of items ranked by valueFn (higher = better).
+// Ties split the points evenly across the ranks they occupy.
+function assignRankPoints(items, valueFn){
+  const n = items.length;
+  const withVal = items.map((it, i)=>({ it, idx: i, val: valueFn(it) }));
+  withVal.sort((a,b)=> b.val - a.val);
+  const points = new Array(n).fill(0);
+  let i = 0;
+  while(i < n){
+    let j = i;
+    while(j + 1 < n && withVal[j+1].val === withVal[i].val) j++;
+    let sum = 0;
+    for(let r=i; r<=j; r++) sum += (n - r);
+    const avg = sum / (j - i + 1);
+    for(let r=i; r<=j; r++) points[withVal[r].idx] = avg;
+    i = j + 1;
+  }
+  return points;
+}
+
+function weekScoresMap(year, week){
+  const games = (data.schedule[year] || []).filter(g=> g.week === week && isPlayed(g));
+  const map = {};
+  games.forEach(g=>{
+    map[g.homeId] = g.homeScore;
+    map[g.awayId] = g.awayScore;
+  });
+  return map;
+}
+
+// For a single week, how many other teams would this team have beaten (all-play)?
+function allPlayRecordForWeek(year, week){
+  const scores = weekScoresMap(year, week);
+  const ids = Object.keys(scores);
+  const record = {};
+  ids.forEach(id=>{
+    let wins = 0, losses = 0, ties = 0;
+    ids.forEach(otherId=>{
+      if(otherId === id) return;
+      if(scores[id] > scores[otherId]) wins++;
+      else if(scores[id] < scores[otherId]) losses++;
+      else ties++;
+    });
+    record[id] = { wins, losses, ties };
+  });
+  return record;
+}
+
+function computePowerRankings(year, throughWeek){
+  const table = {};
+  data.owners.forEach(o=>{ table[o.id] = { wins:0, losses:0, ties:0, pf:0, apWins:0, apLosses:0, apTies:0 }; });
+
+  for(let w=1; w<=throughWeek; w++){
+    const games = (data.schedule[year] || []).filter(g=> g.week === w && isPlayed(g));
+    games.forEach(g=>{
+      if(!table[g.homeId] || !table[g.awayId]) return;
+      table[g.homeId].pf += g.homeScore;
+      table[g.awayId].pf += g.awayScore;
+      if(g.homeScore > g.awayScore){ table[g.homeId].wins++; table[g.awayId].losses++; }
+      else if(g.homeScore < g.awayScore){ table[g.awayId].wins++; table[g.homeId].losses++; }
+      else { table[g.homeId].ties++; table[g.awayId].ties++; }
+    });
+    const apRecord = allPlayRecordForWeek(year, w);
+    Object.keys(apRecord).forEach(id=>{
+      if(!table[id]) return;
+      table[id].apWins += apRecord[id].wins;
+      table[id].apLosses += apRecord[id].losses;
+      table[id].apTies += apRecord[id].ties;
+    });
+  }
+
+  const rows = data.owners.map(o=> ({ owner: o, rec: table[o.id] }));
+  const recordPts = assignRankPoints(rows, r=> r.rec.wins + 0.5*r.rec.ties);
+  const pfPts = assignRankPoints(rows, r=> r.rec.pf);
+  const apPts = assignRankPoints(rows, r=> r.rec.apWins + 0.5*r.rec.apTies);
+
+  rows.forEach((r, i)=>{
+    r.recordPts = recordPts[i];
+    r.pfPts = pfPts[i];
+    r.apPts = apPts[i];
+    r.composite = recordPts[i] + pfPts[i] + apPts[i];
+  });
+
+  rows.sort((a,b)=> b.composite - a.composite);
+  return rows;
+}
+
+function lastPlayedWeek(year){
+  const games = (data.schedule[year] || []).filter(isPlayed);
+  return games.reduce((max,g)=> Math.max(max, g.week), 0);
+}
+
+function computeEliminations(year, throughWeek){
+  const standings = orderedStandings(year, throughWeek);
+  if(standings.length < 8) return [];
+  const eighthWins = standings[7].rec.wins + 0.5*standings[7].rec.ties;
+  const eliminated = [];
+  standings.forEach((row, idx)=>{
+    if(idx < 8) return;
+    const totalScheduled = (data.schedule[year] || []).filter(g=> g.homeId === row.owner.id || g.awayId === row.owner.id).length;
+    const played = row.rec.wins + row.rec.losses + row.rec.ties;
+    const remaining = Math.max(0, totalScheduled - played);
+    const maxPossibleWins = row.rec.wins + remaining;
+    if(maxPossibleWins < eighthWins) eliminated.push(row.owner);
+  });
+  return eliminated;
+}
+
+function renderPowerTrendChart(container, year, throughWeek){
+  if(!container) return;
+  if(throughWeek < 1 || data.owners.length === 0){
+    container.innerHTML = `<div class="empty">Not enough played weeks yet to chart a trend.</div>`;
+    return;
+  }
+  const weeks = Array.from({ length: throughWeek }, (_, i)=> i + 1);
+  const series = data.owners.map((o, idx)=>({
+    owner: o,
+    color: colorFor(idx),
+    values: weeks.map(w=> computePowerRankings(year, w).find(r=> r.owner.id === o.id)?.composite ?? 0)
+  }));
+
+  const allVals = series.flatMap(s=> s.values);
+  const maxV = Math.max(...allVals, 1);
+  const minV = Math.min(...allVals, 0);
+  const padTop = 10, padBottom = 24, padLeft = 28, padRight = 10;
+  const w = 600, h = 260;
+  const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
+
+  const xFor = (i)=> padLeft + (weeks.length === 1 ? plotW/2 : (i/(weeks.length-1)) * plotW);
+  const yFor = (v)=> padTop + plotH - ((v - minV) / (maxV - minV || 1)) * plotH;
+
+  const lines = series.map(s=>{
+    const pts = s.values.map((v,i)=> `${xFor(i)},${yFor(v)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" opacity="0.9"/>`;
+  }).join('');
+
+  const xLabels = weeks.map((wk,i)=> `<text x="${xFor(i)}" y="${h-6}" font-size="10" fill="#5b5847" text-anchor="middle">W${wk}</text>`).join('');
+  const yTicks = [minV, (minV+maxV)/2, maxV].map(v=> `<text x="${padLeft-6}" y="${yFor(v)+3}" font-size="10" fill="#5b5847" text-anchor="end">${v.toFixed(0)}</text>`).join('');
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
+      <line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${h-padBottom}" stroke="#D9D1B8"/>
+      <line x1="${padLeft}" y1="${h-padBottom}" x2="${w-padRight}" y2="${h-padBottom}" stroke="#D9D1B8"/>
+      ${yTicks}
+      ${xLabels}
+      ${lines}
+    </svg>
+    <div class="pr-chart-legend">
+      ${series.map(s=> `<span><span class="pr-chart-swatch" style="background:${s.color}"></span>${s.owner.team || s.owner.name}</span>`).join('')}
+    </div>
+  `;
+}
+
+function renderPowerRankingsSelect(){
+  const sel = document.getElementById('prWeekSelect');
+  const last = Math.max(1, lastPlayedWeek(currentSeason));
+  const prev = sel.value;
+  sel.innerHTML = DIGEST_WEEKS.map(w=> `<option value="${w}">Week ${w}</option>`).join('');
+  sel.value = DIGEST_WEEKS.includes(Number(prev)) ? prev : String(last);
+}
+
+function renderPowerRankingsTab(){
+  if(data.owners.length === 0){
+    document.getElementById('prTableBody').innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
+    document.getElementById('prChartRoot').innerHTML = '';
+    return;
+  }
+  const week = Number(document.getElementById('prWeekSelect').value) || 1;
+  const rows = computePowerRankings(currentSeason, week);
+  document.getElementById('prTableBody').innerHTML = rows.map((r, i)=> `
+    <tr>
+      <td>${i+1}</td>
+      <td>${r.owner.team || r.owner.name}</td>
+      <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''} (${r.recordPts.toFixed(1)})</td>
+      <td class="num">${r.rec.pf.toFixed(1)} (${r.pfPts.toFixed(1)})</td>
+      <td class="num">${r.rec.apWins.toFixed(1)}-${r.rec.apLosses.toFixed(1)}${r.rec.apTies ? '-'+r.rec.apTies.toFixed(1) : ''} (${r.apPts.toFixed(1)})</td>
+      <td class="num"><strong>${r.composite.toFixed(1)}</strong></td>
+    </tr>
+  `).join('');
+  renderPowerTrendChart(document.getElementById('prChartRoot'), currentSeason, week);
+}
+
+document.getElementById('prWeekSelect').addEventListener('change', renderPowerRankingsTab);
 
 function renderScheduleFilterOptions(){
   const teamSel = document.getElementById('scheduleTeamFilter');
@@ -3037,7 +3323,7 @@ function setActiveTab(tabName, soonName){
   } else {
     document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
   }
-  document.getElementById('rosterToolbar').style.visibility = ['rosters','stats','schedule','standings','transactions'].includes(tabName) ? 'visible' : 'hidden';
+  document.getElementById('rosterToolbar').style.visibility = ['rosters','stats','schedule','standings','transactions','powerrankings'].includes(tabName) ? 'visible' : 'hidden';
 }
 
 document.getElementById('tabs').addEventListener('click', (e)=>{
@@ -3058,6 +3344,10 @@ document.getElementById('tabs').addEventListener('click', (e)=>{
     renderTradeBuilder();
     updateLineupSettingsVisibility();
   }
+  if(btn.dataset.tab === 'powerrankings'){
+    renderPowerRankingsSelect();
+    renderPowerRankingsTab();
+  }
 });
 
 document.getElementById('seasonSelect').addEventListener('change', (e)=>{
@@ -3070,6 +3360,8 @@ document.getElementById('seasonSelect').addEventListener('change', (e)=>{
   renderScheduleFilterOptions();
   renderScheduleList();
   renderTxnList();
+  renderPowerRankingsSelect();
+  renderPowerRankingsTab();
 });
 
 document.getElementById('addSeasonBtn').addEventListener('click', ()=>{
@@ -3103,6 +3395,8 @@ async function refreshAllPanels(){
   }
   renderTxnList();
   updateLineupSettingsVisibility();
+  renderPowerRankingsSelect();
+  renderPowerRankingsTab();
 }
 
 document.getElementById('editToggle').addEventListener('click', ()=>{
@@ -3164,6 +3458,8 @@ document.getElementById('addRecordBtn').addEventListener('click', addRecord);
   renderScheduleFilterOptions();
   renderScheduleList();
   renderTxnList();
+  renderPowerRankingsSelect();
+  renderPowerRankingsTab();
 })();
 </script>
 </body>
