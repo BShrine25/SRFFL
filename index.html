@@ -462,6 +462,9 @@
         <option value="defense">Defense</option>
         <option value="kicking">Kicking</option>
       </select>
+      <button class="btn small" id="exportStatsBtn">Export CSV</button>
+      <button class="btn small" id="importStatsBtn" style="display:none;">Import CSV</button>
+      <input type="file" id="importStatsInput" accept=".csv,text/csv" style="display:none;">
     </div>
     <div class="card" style="overflow-x:auto;">
       <table id="statsTable">
@@ -514,14 +517,14 @@
   </section>
 
   <section class="panel" id="panel-tradesim">
-    <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then ask AI to weigh in — or skip straight to trade suggestions based on roster needs.</p>
+    <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then get an instant read based on season points-per-game and roster needs — no AI, no waiting.</p>
     <div class="trade-teams-select">
       <div>Team A <select id="tradeTeamA"></select></div>
       <div>Team B <select id="tradeTeamB"></select></div>
     </div>
     <div class="trade-builder" id="tradeBuilder"></div>
     <div class="trade-actions">
-      <button class="btn btn-primary" id="assessTradeBtn">Ask AI to assess this trade</button>
+      <button class="btn btn-primary" id="assessTradeBtn">Assess this trade</button>
       <button class="btn" id="suggestTradesBtn">Suggest trades between these teams</button>
     </div>
     <div id="tradeResult"></div>
@@ -2008,6 +2011,7 @@ function computeOfficialSeasonStatsByTeam(year){
 
 function renderStats(){
   document.getElementById('statsSeasonLabel').textContent = currentSeason;
+  document.getElementById('importStatsBtn').style.display = editMode ? 'inline-block' : 'none';
   const cat = STAT_CATEGORIES[statsCategory];
   const head = document.getElementById('statsTableHead');
   const body = document.getElementById('statsTableBody');
@@ -2252,6 +2256,134 @@ function renderPlayoffBracket(container, year){
     <p class="hint" style="text-align:center; margin-top:.8rem;">Seeded from current standings — updates automatically as scores come in. Semifinal and championship results aren't tracked yet, so those slots stay TBD.</p>
   `;
 }
+
+/* ---------- Stats CSV export/import ---------- */
+
+const STATS_CSV_FIELDS = [
+  'py','ptd','int','pass2pt','ry','rtd','rush2pt','fuml',
+  'rey','rec','retd','rec2pt',
+  'sk','dint','fr','ff','sf','defTD','blkk','pa','twoPtRet','onePtSaf',
+  'pat','patm','fg0','fg40','fg50','fg60','fgm0','fgm40'
+];
+
+function csvEscape(val){
+  const s = String(val === undefined || val === null ? '' : val);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function downloadTextFile(text, filename, mime){
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=> l.length > 0);
+  return lines.map(line=>{
+    const out = [];
+    let cur = '', inQuotes = false;
+    for(let i=0; i<line.length; i++){
+      const c = line[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(line[i+1] === '"'){ cur += '"'; i++; } else inQuotes = false;
+        } else cur += c;
+      } else {
+        if(c === '"') inQuotes = true;
+        else if(c === ','){ out.push(cur); cur = ''; }
+        else cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  });
+}
+
+function exportStatsCSV(){
+  const headers = ['year','week','ownerId','team','player','position','started','points', ...STATS_CSV_FIELDS];
+  const rows = [headers];
+  Object.keys(data.schedule).forEach(year=>{
+    (data.schedule[year] || []).forEach(game=>{
+      Object.keys(game.stats || {}).forEach(ownerId=>{
+        const owner = data.owners.find(o=>o.id === ownerId);
+        const teamName = owner ? (owner.team || owner.name) : ownerId;
+        Object.values(game.stats[ownerId] || {}).forEach(entry=>{
+          const row = [year, game.week, ownerId, teamName, entry.name, entry.pos, entry.started === false ? '0' : '1', entry.points || 0];
+          STATS_CSV_FIELDS.forEach(f=> row.push(entry.raw && entry.raw[f] !== undefined ? entry.raw[f] : ''));
+          rows.push(row);
+        });
+      });
+    });
+  });
+  const csv = rows.map(r=> r.map(csvEscape).join(',')).join('\n');
+  downloadTextFile(csv, `srffl-stats-${currentSeason}.csv`, 'text/csv');
+  toast(`Exported ${rows.length - 1} stat line(s).`);
+}
+
+async function importStatsCSV(file){
+  let text;
+  try{ text = await file.text(); }
+  catch(e){ toast('Could not read that file.'); return; }
+
+  const rows = parseCSV(text);
+  if(rows.length < 2){ toast('No data rows found in that file.'); return; }
+  const headers = rows[0];
+  let imported = 0, skipped = 0;
+
+  for(let i=1; i<rows.length; i++){
+    const cells = rows[i];
+    const rec = {};
+    headers.forEach((h, idx)=> rec[h] = cells[idx]);
+
+    const year = rec.year;
+    const week = Number(rec.week);
+    const ownerId = rec.ownerId;
+    const name = rec.player;
+    const pos = rec.position;
+    if(!year || !week || !ownerId || !name){ skipped++; continue; }
+
+    ensureScheduleSeason(year);
+    const game = data.schedule[year].find(g=> g.week === week && (g.homeId === ownerId || g.awayId === ownerId));
+    if(!game){ skipped++; continue; }
+
+    const raw = {};
+    STATS_CSV_FIELDS.forEach(f=>{
+      if(rec[f] !== undefined && rec[f] !== ''){
+        const n = Number(rec[f]);
+        if(!isNaN(n)) raw[f] = n;
+      }
+    });
+    if(Object.keys(raw).length === 0){ skipped++; continue; }
+
+    const normPos = normalizePos(pos);
+    const points = computeFantasyPoints(normPos, raw);
+    if(!game.stats[ownerId]) game.stats[ownerId] = {};
+    game.stats[ownerId][statKey(name)] = { name, pos, started: rec.started !== '0', raw, points };
+    imported++;
+  }
+
+  saveData();
+  renderStats();
+  renderRosters();
+  renderSeasonStandings();
+  toast(`Imported ${imported} stat line(s)${skipped ? `, skipped ${skipped} (no matching game)` : ''}.`);
+}
+
+document.getElementById('exportStatsBtn').addEventListener('click', exportStatsCSV);
+document.getElementById('importStatsBtn').addEventListener('click', ()=>{
+  document.getElementById('importStatsInput').click();
+});
+document.getElementById('importStatsInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(file) importStatsCSV(file);
+});
 
 /* ---------- Schedule ---------- */
 
@@ -2604,21 +2736,100 @@ function renderTradeBuilder(){
   });
 }
 
-async function callClaude(systemPrompt, userPrompt){
-  if(!sb){ throw new Error('Supabase isn\'t configured yet'); }
-  const response = await fetch(`${FUNCTIONS_URL}/trade-ai`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system: systemPrompt, prompt: userPrompt })
-  });
-  const result = await response.json();
-  if(!response.ok || result.error){ throw new Error(result.error || 'AI request failed'); }
-  return result.text || '';
+function playerValue(p){
+  const stat = getPlayerStat(currentSeason, p.name);
+  if(stat && stat.games > 0) return stat.points / stat.games;
+  return null;
 }
 
-function parseJSONLoose(text){
-  const cleaned = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
+function teamPositionCounts(roster){
+  const counts = {};
+  roster.forEach(p=>{
+    const pos = normalizePos(p.pos);
+    counts[pos] = (counts[pos] || 0) + 1;
+  });
+  return counts;
+}
+
+function positionalNeedNote(sentAway, received, myCounts){
+  const notes = [];
+  const posOf = p=> normalizePos(p.pos);
+  [...new Set(received.map(posOf))].forEach(pos=>{
+    if((myCounts[pos] || 0) <= 1) notes.push(`adds depth at ${pos}, a thin spot on this roster`);
+  });
+  [...new Set(sentAway.map(posOf))].forEach(pos=>{
+    if((myCounts[pos] || 0) >= 4) notes.push(`gives up ${pos} depth, which this roster had plenty of`);
+  });
+  return notes.length ? notes.join('; ') + '.' : 'No major positional need either way based on current roster construction.';
+}
+
+function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
+  const valA = sendA.map(playerValue);
+  const valB = sendB.map(playerValue);
+  const knownA = valA.filter(v=> v !== null);
+  const knownB = valB.filter(v=> v !== null);
+  const missingA = valA.length - knownA.length;
+  const missingB = valB.length - knownB.length;
+  const sumA = knownA.reduce((s,v)=> s+v, 0);
+  const sumB = knownB.reduce((s,v)=> s+v, 0);
+
+  let verdict, summary;
+  if(knownA.length === 0 && knownB.length === 0){
+    verdict = 'Not enough data';
+    summary = 'None of these players have season stats logged yet, so there\'s nothing to compare numerically — check back once some games are in the books.';
+  } else {
+    const total = sumA + sumB || 1;
+    const diff = sumB - sumA;
+    const pct = Math.abs(diff) / total;
+    if(pct < 0.12){
+      verdict = 'Fair trade';
+      summary = `Roughly even value — ${nameA} sends ~${sumA.toFixed(1)} combined PPG, ${nameB} sends ~${sumB.toFixed(1)} combined PPG.`;
+    } else if(diff > 0){
+      verdict = `Good for ${nameA}`;
+      summary = `${nameA} is taking on more season-long production than they're giving up (~${sumB.toFixed(1)} PPG in vs ~${sumA.toFixed(1)} PPG out).`;
+    } else {
+      verdict = `Good for ${nameB}`;
+      summary = `${nameB} is taking on more season-long production than they're giving up (~${sumA.toFixed(1)} PPG in vs ~${sumB.toFixed(1)} PPG out).`;
+    }
+  }
+
+  const countsA = teamPositionCounts(rosterA);
+  const countsB = teamPositionCounts(rosterB);
+
+  return {
+    verdict, summary,
+    forTeamA: (missingA ? `${missingA} of the player${missingA > 1 ? 's' : ''} ${nameA} is sending ${missingA > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendA, sendB, countsA),
+    forTeamB: (missingB ? `${missingB} of the player${missingB > 1 ? 's' : ''} ${nameB} is sending ${missingB > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendB, sendA, countsB)
+  };
+}
+
+function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
+  const countsA = teamPositionCounts(rosterA);
+  const countsB = teamPositionCounts(rosterB);
+  const positions = [...new Set([...rosterA, ...rosterB].map(p=> normalizePos(p.pos)))];
+
+  const aSurplus = positions.filter(pos=> (countsA[pos] || 0) - (countsB[pos] || 0) >= 2);
+  const bSurplus = positions.filter(pos=> (countsB[pos] || 0) - (countsA[pos] || 0) >= 2);
+
+  const suggestions = [];
+  aSurplus.forEach(posA=>{
+    bSurplus.forEach(posB=>{
+      if(posA === posB) return;
+      const aCandidates = rosterA.filter(p=> normalizePos(p.pos) === posA)
+        .map(p=>({ p, val: playerValue(p) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
+      const bCandidates = rosterB.filter(p=> normalizePos(p.pos) === posB)
+        .map(p=>({ p, val: playerValue(p) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
+      if(aCandidates.length && bCandidates.length){
+        const aPick = aCandidates[0], bPick = bCandidates[0];
+        suggestions.push({
+          aSends: [aPick.p.name],
+          bSends: [bPick.p.name],
+          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Values are close (${aPick.val.toFixed(1)} vs ${bPick.val.toFixed(1)} PPG).`
+        });
+      }
+    });
+  });
+  return suggestions.slice(0, 3);
 }
 
 document.getElementById('tradeTeamA').addEventListener('change', ()=>{
@@ -2632,7 +2843,7 @@ document.getElementById('tradeTeamB').addEventListener('change', ()=>{
   renderTradeBuilder();
 });
 
-document.getElementById('assessTradeBtn').addEventListener('click', async ()=>{
+document.getElementById('assessTradeBtn').addEventListener('click', ()=>{
   const aId = document.getElementById('tradeTeamA').value;
   const bId = document.getElementById('tradeTeamB').value;
   if(aId === bId){ toast('Pick two different teams'); return; }
@@ -2644,41 +2855,20 @@ document.getElementById('assessTradeBtn').addEventListener('click', async ()=>{
   const sendB = [...tradeSelections.B].map(i=>rosterB[i]).filter(Boolean);
   if(sendA.length === 0 && sendB.length === 0){ toast('Select at least one player on a side'); return; }
 
-  const resultBox = document.getElementById('tradeResult');
-  resultBox.innerHTML = `<p class="loading-text">Asking AI to weigh in on this trade...</p>`;
-
   const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
-  const prompt = `You are a sharp, concise fantasy football trade analyst.
-Team "${nameA}" full roster: ${rosterA.map(playerStatLine).join(', ') || 'unknown'}.
-Team "${nameB}" full roster: ${rosterB.map(playerStatLine).join(', ') || 'unknown'}.
-
-Proposed trade:
-${nameA} sends: ${sendA.map(playerStatLine).join(', ') || 'nothing'}
-${nameB} sends: ${sendB.map(playerStatLine).join(', ') || 'nothing'}
-
-Base your reasoning only on the season stats given above (points, games, points per game) plus your general knowledge of these players' roles. You have no visibility into future weeks, upcoming matchups, injuries, or emerging trends beyond what's stated — do not present projections as certain, and say so plainly if a stat is missing rather than guessing a number.
-
-Respond with ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
-{"verdict":"short label such as Good for ${nameA}, Good for ${nameB}, Good for both, Fair trade, or Bad for both","summary":"1-2 sentence overall take","forTeamA":"1-2 sentences on how this affects ${nameA}","forTeamB":"1-2 sentences on how this affects ${nameB}"}`;
-
-  try{
-    const text = await callClaude('You are a fantasy football trade analyst working only from season-to-date stats the user provides. You have no knowledge of future performance, trends, or upcoming matchups — never imply otherwise. Always respond with strict JSON only, no other text.', prompt);
-    const parsed = parseJSONLoose(text);
-    resultBox.innerHTML = `
-      <div class="verdict-card">
-        <span class="verdict-badge">${parsed.verdict}</span>
-        <p>${parsed.summary}</p>
-        <p><strong>${nameA}:</strong> ${parsed.forTeamA}</p>
-        <p><strong>${nameB}:</strong> ${parsed.forTeamB}</p>
-      </div>
-      <p class="hint">AI opinion based on the rosters as entered here — not live stats.</p>
-    `;
-  }catch(e){
-    resultBox.innerHTML = `<p class="hint">Couldn't get an assessment right now — try again in a moment.</p>`;
-  }
+  const parsed = assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB);
+  document.getElementById('tradeResult').innerHTML = `
+    <div class="verdict-card">
+      <span class="verdict-badge">${parsed.verdict}</span>
+      <p>${parsed.summary}</p>
+      <p><strong>${nameA}:</strong> ${parsed.forTeamA}</p>
+      <p><strong>${nameB}:</strong> ${parsed.forTeamB}</p>
+    </div>
+    <p class="hint">Calculated from season points-per-game and roster composition — not a nuanced read, just the numbers as logged so far.</p>
+  `;
 });
 
-document.getElementById('suggestTradesBtn').addEventListener('click', async ()=>{
+document.getElementById('suggestTradesBtn').addEventListener('click', ()=>{
   const aId = document.getElementById('tradeTeamA').value;
   const bId = document.getElementById('tradeTeamB').value;
   if(aId === bId){ toast('Pick two different teams'); return; }
@@ -2688,38 +2878,20 @@ document.getElementById('suggestTradesBtn').addEventListener('click', async ()=>
   const rosterB = data.rosters[currentSeason][bId] || [];
   if(rosterA.length === 0 || rosterB.length === 0){ toast('Both rosters need players entered first'); return; }
 
-  const resultBox = document.getElementById('tradeResult');
-  resultBox.innerHTML = `<p class="loading-text">Looking for trades that fit both rosters...</p>`;
-
   const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
-  const prompt = `You are a fantasy football trade advisor.
-Team "${nameA}" roster: ${rosterA.map(playerStatLine).join(', ')}.
-Team "${nameB}" roster: ${rosterB.map(playerStatLine).join(', ')}.
-
-Look at positional depth and season-to-date production for each team (for example, a team with five productive WRs and one low-output TE likely has WR surplus and TE need). Propose up to 3 realistic, mutually-beneficial trade packages between these two specific teams.
-
-You only know what's shown above — season stats to date and general player knowledge. You cannot see future weeks, schedule strength, or emerging trends, so don't frame suggestions as guaranteed wins, just as reasonable fits today.
-
-Respond with ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
-{"trades":[{"aSends":["Player Name"],"bSends":["Player Name"],"rationale":"1-2 sentences on why this fits both teams' needs"}]}`;
-
-  try{
-    const text = await callClaude('You are a fantasy football trade advisor working only from season-to-date stats the user provides. You have no knowledge of future performance, trends, or upcoming matchups — never imply otherwise. Always respond with strict JSON only, no other text.', prompt);
-    const parsed = parseJSONLoose(text);
-    if(!parsed.trades || parsed.trades.length === 0){
-      resultBox.innerHTML = `<p class="hint">No clear trade fits found between these two rosters right now.</p>`;
-      return;
-    }
-    resultBox.innerHTML = parsed.trades.map(t=>`
-      <div class="suggestion-card">
-        <div class="suggestion-side"><strong>${nameA} sends:</strong> ${t.aSends.join(', ')}</div>
-        <div class="suggestion-side"><strong>${nameB} sends:</strong> ${t.bSends.join(', ')}</div>
-        <p class="hint" style="margin:.4rem 0 0;">${t.rationale}</p>
-      </div>
-    `).join('') + `<p class="hint">AI-generated suggestions based on roster composition — sanity check before proposing for real.</p>`;
-  }catch(e){
-    resultBox.innerHTML = `<p class="hint">Couldn't generate suggestions right now — try again in a moment.</p>`;
+  const trades = suggestTradesLocally(nameA, nameB, rosterA, rosterB);
+  const resultBox = document.getElementById('tradeResult');
+  if(trades.length === 0){
+    resultBox.innerHTML = `<p class="hint">No clear surplus-vs-need fit found between these two rosters right now — that's not necessarily bad, it just means neither side has an obvious positional imbalance to trade around.</p>`;
+    return;
   }
+  resultBox.innerHTML = trades.map(t=>`
+    <div class="suggestion-card">
+      <div class="suggestion-side"><strong>${nameA} sends:</strong> ${t.aSends.join(', ')}</div>
+      <div class="suggestion-side"><strong>${nameB} sends:</strong> ${t.bSends.join(', ')}</div>
+      <p class="hint" style="margin:.4rem 0 0;">${t.rationale}</p>
+    </div>
+  `).join('') + `<p class="hint">Based on roster composition and PPG only — sanity check before proposing for real.</p>`;
 });
 
 /* ---------- Nav & wiring ---------- */
