@@ -99,7 +99,7 @@
   .team-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
   .team-head{ display:flex; align-items:center; gap:.65rem; padding:.7rem .8rem; border-bottom:3px solid var(--card-color, var(--mustard)); }
   .badge{
-    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    width:38px; height:38px; border-radius:50%; flex-shrink:0; overflow:hidden;
     background:var(--card-color, var(--field)); color:#fff;
     display:flex; align-items:center; justify-content:center; font-size:.95rem;
   }
@@ -133,6 +133,7 @@
   .card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
   .card table td, .card table th{ padding:.45rem .7rem; }
   .num{ text-align:right; font-variant-numeric:tabular-nums; }
+  #statsTable .num{ text-align:center; }
 
   .ledger-item{ padding:.75rem .9rem; border-bottom:1px solid var(--line); }
   .ledger-item:last-child{ border-bottom:none; }
@@ -267,6 +268,7 @@
   .game-score.winner{ color:var(--field); }
   .game-score.loser{ color:var(--ink-soft); }
   .game-team-name{ font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+  .game-team-record{ font-size:.75rem; color:var(--ink-soft); flex-shrink:0; white-space:nowrap; }
   .game-detail-header{ text-align:center; margin-bottom:1rem; }
   .game-detail-score{ display:flex; align-items:center; justify-content:center; gap:1rem; font-family:'Anton',sans-serif; font-size:1.5rem; margin:.6rem 0 1.2rem; }
   .game-detail-score input{ width:64px; text-align:center; font-family:'Anton',sans-serif; font-size:1.4rem; border:1px solid var(--line); border-radius:4px; padding:.2rem; color:var(--ink); background:#fff; }
@@ -306,6 +308,7 @@
   .bracket-vs{ text-align:center; font-size:.62rem; color:var(--ink-soft); padding:.15rem 0; text-transform:uppercase; letter-spacing:.04em; }
   .bracket-tbd{ background:var(--chalk-2); border:1px dashed var(--line); border-radius:var(--radius); padding:.6rem; text-align:center; font-size:.72rem; color:var(--ink-soft); }
   .bracket-champ{ background:var(--field); color:var(--mustard); border-radius:var(--radius); padding:.8rem; text-align:center; font-family:'Anton',sans-serif; font-size:1rem; letter-spacing:.03em; }
+  .bracket-pred-select{ width:100%; font-family:'Roboto Slab',serif; font-size:.8rem; padding:.25rem .3rem; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); }
 
   /* Vertical photo bracket (Season Preview) */
   .bracket-vertical{ max-width:380px; margin:0 auto; display:flex; flex-direction:column; gap:1rem; }
@@ -332,6 +335,7 @@
   /* Locking / started */
   .lock-badge{ font-size:.66rem; text-transform:uppercase; letter-spacing:.03em; color:var(--field); background:var(--mustard); padding:.15rem .4rem; border-radius:3px; margin-left:.4rem; }
   .started-toggle{ display:flex; align-items:center; gap:.3rem; font-size:.72rem; color:var(--ink-soft); }
+  .bench-divider{ text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:.8rem 0; padding-top:.6rem; border-top:2px dashed var(--line); }
 
   /* Roster baseline editor */
   .baseline-btn{ background:none; border:none; color:var(--ink-soft); cursor:pointer; font-size:.7rem; text-decoration:underline; }
@@ -469,6 +473,7 @@
     </div>
     <h2 class="section-title" style="margin-top:1.4rem;">Playoff Picture</h2>
     <div id="standingsBracket"></div>
+    <div id="standingsScenarios"></div>
   </section>
 
   <section class="panel" id="panel-stats">
@@ -770,6 +775,13 @@ function initials(name){
   return (name||'').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
 }
 
+function teamBadgeInner(ownerId, year){
+  const logo = data.digest[String(year)]?.SZN?.teamPages?.[ownerId]?.logo;
+  if(logo) return `<img src="${logo}" style="width:100%; height:100%; object-fit:cover;">`;
+  const owner = data.owners.find(o=>o.id === ownerId);
+  return initials(owner ? (owner.team || owner.name) : '?');
+}
+
 /* ---------- Rosters ---------- */
 
 function renderSeasonSelect(){
@@ -821,7 +833,7 @@ function renderRosters(){
     const head = document.createElement('div');
     head.className = 'team-head';
     head.innerHTML = `
-      <div class="badge">${initials(owner.team || owner.name)}</div>
+      <div class="badge">${teamBadgeInner(owner.id, currentSeason)}</div>
       <div class="team-meta">
         <div class="team-name" ${editMode?'contenteditable="true"':''} data-field="team" data-owner="${owner.id}">${owner.team || 'Unnamed Team'}</div>
         <div class="owner-name" ${editMode?'contenteditable="true"':''} data-field="name" data-owner="${owner.id}">${owner.name || 'Owner name'}</div>
@@ -835,7 +847,7 @@ function renderRosters(){
     const players = data.rosters[currentSeason][owner.id] || [];
     players.forEach((p, pi)=>{
       const tr = document.createElement('tr');
-      const pts = seasonStats[statKey(p.name)] ? seasonStats[statKey(p.name)].points : '—';
+      const pts = seasonStats[statKey(p.name)] ? seasonStats[statKey(p.name)].points.toFixed(2) : '—';
       tr.innerHTML = `
         <td ${editMode?'contenteditable="true"':''} data-owner="${owner.id}" data-pi="${pi}" data-field="name">${p.name}</td>
         <td class="pos" ${editMode?'contenteditable="true"':''} data-owner="${owner.id}" data-pi="${pi}" data-field="pos">${p.pos}</td>
@@ -1609,89 +1621,65 @@ function bracketPageHTML(entry){
 function ensureBracketPrediction(entry){
   if(!entry.bracketPrediction) entry.bracketPrediction = {};
   const p = entry.bracketPrediction;
-  const keys = [
-    'qf1_top','qf1_bottom','qf1_winner','qf2_top','qf2_bottom','qf2_winner','sf1_winner',
-    'qf3_top','qf3_bottom','qf3_winner','qf4_top','qf4_bottom','qf4_winner','sf2_winner',
-    'champion'
-  ];
+  const keys = ['qfA_top','qfA_bottom','qfB_top','qfB_bottom','sfLeft','qfC_top','qfC_bottom','qfD_top','qfD_bottom','sfRight','champion'];
   keys.forEach(k=>{ if(p[k] === undefined) p[k] = ''; });
   return p;
 }
 
-function bracketPhotoSlotHTML(pred, key, extraClass){
-  const photo = pred[key];
+function bracketPredSlotHTML(pred, slotKey, year){
+  const ownerId = pred[slotKey];
+  const owner = data.owners.find(o=>o.id === ownerId);
+  if(editMode){
+    const options = ['<option value="">TBD</option>']
+      .concat(data.owners.map(o=>`<option value="${o.id}" ${o.id === ownerId ? 'selected' : ''}>${o.team || o.name}</option>`))
+      .join('');
+    return `<div class="bracket-team-row"><select class="bracket-pred-select" data-slot="${slotKey}">${options}</select></div>`;
+  }
   return `
-    <div class="bracket-photo-box ${extraClass||''} ${editMode?'editable':''}" data-bracket-slot="${key}">
-      ${photo ? `<img src="${photo}">` : (editMode ? '+' : '')}
+    <div class="bracket-team-row">
+      ${owner ? teamLogoHTML(owner.id, year) : ''}
+      <span class="bracket-team-name">${owner ? (owner.team || owner.name) : 'TBD'}</span>
     </div>
   `;
 }
 
-function renderBracketPrediction(container, entry){
+function bracketPredMatchupBox(pred, year, topSlot, bottomSlot){
+  return `<div class="bracket-matchup">${bracketPredSlotHTML(pred, topSlot, year)}<div class="bracket-vs">vs</div>${bracketPredSlotHTML(pred, bottomSlot, year)}</div>`;
+}
+
+function renderBracketPrediction(container, entry, year){
   if(!container) return;
   const pred = ensureBracketPrediction(entry);
-  const slot = (key, extraClass)=> bracketPhotoSlotHTML(pred, key, extraClass);
-
   container.innerHTML = `
-    <div class="bracket-vertical">
-      <div class="bracket-half">
-        <div class="bracket-pair-row">
-          <div class="bracket-pair-stack">${slot('qf1_top')}${slot('qf1_bottom')}</div>
-          <div class="bracket-arrow">→</div>
-          ${slot('qf1_winner')}
-        </div>
-        <div class="bracket-pair-row">
-          <div class="bracket-pair-stack">${slot('qf2_top')}${slot('qf2_bottom')}</div>
-          <div class="bracket-arrow">→</div>
-          ${slot('qf2_winner')}
-        </div>
-        <div class="bracket-sf-row">
-          <div class="bracket-arrow">→</div>
-          ${slot('sf1_winner')}
-        </div>
+    <div class="bracket-grid">
+      <div class="bracket-col">
+        ${bracketPredMatchupBox(pred, year, 'qfA_top', 'qfA_bottom')}
+        ${bracketPredMatchupBox(pred, year, 'qfB_top', 'qfB_bottom')}
       </div>
-      <div class="bracket-half">
-        <div class="bracket-pair-row">
-          <div class="bracket-pair-stack">${slot('qf3_top')}${slot('qf3_bottom')}</div>
-          <div class="bracket-arrow">→</div>
-          ${slot('qf3_winner')}
-        </div>
-        <div class="bracket-pair-row">
-          <div class="bracket-pair-stack">${slot('qf4_top')}${slot('qf4_bottom')}</div>
-          <div class="bracket-arrow">→</div>
-          ${slot('qf4_winner')}
-        </div>
-        <div class="bracket-sf-row">
-          <div class="bracket-arrow">→</div>
-          ${slot('sf2_winner')}
-        </div>
+      <div class="bracket-col bracket-col-center">
+        <div class="bracket-tbd">${bracketPredSlotHTML(pred, 'sfLeft', year)}</div>
+        <div class="bracket-champ">${bracketPredSlotHTML(pred, 'champion', year)}</div>
+        <div class="bracket-tbd">${bracketPredSlotHTML(pred, 'sfRight', year)}</div>
       </div>
-      <div class="bracket-champ-row">
-        <div class="bracket-champ-box">
-          ${slot('champion', 'bracket-champ-photo')}
-          <div class="bracket-champ-label">CHAMPS</div>
-        </div>
+      <div class="bracket-col">
+        ${bracketPredMatchupBox(pred, year, 'qfC_top', 'qfC_bottom')}
+        ${bracketPredMatchupBox(pred, year, 'qfD_top', 'qfD_bottom')}
       </div>
     </div>
-    ${editMode ? `<p class="hint" style="text-align:center; margin-top:.6rem;">Tap any box to add a team photo or logo — fill in your own prediction for every round.</p>` : ''}
+    ${editMode ? `<p class="hint" style="text-align:center; margin-top:.6rem;">Pick your own prediction for every round — separate from the live bracket on the Standings tab, won't auto-fill.</p>` : ''}
   `;
-
   if(editMode){
-    container.querySelectorAll('[data-bracket-slot]').forEach(el=>{
-      el.addEventListener('click', ()=>{
-        const key = el.dataset.bracketSlot;
-        pickAndUploadImage((url)=>{
-          pred[key] = url;
-          saveData();
-          renderDigest();
-        });
+    container.querySelectorAll('.bracket-pred-select').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        pred[sel.dataset.slot] = sel.value;
+        saveData();
       });
     });
   }
 }
 
 function wireBracketPageEvents(root, entry){
-  renderBracketPrediction(document.getElementById('digestBracketRoot'), entry);
+  renderBracketPrediction(document.getElementById('digestBracketRoot'), entry, currentDigestYear);
   if(!editMode) return;
   document.getElementById('bracketNotes').addEventListener('blur', (e)=>{
     entry.bracketNotes = e.target.textContent;
@@ -2062,7 +2050,7 @@ function getPlayerStat(year, name){
 function playerStatLine(p){
   const stat = getPlayerStat(currentSeason, p.name);
   if(stat && stat.games > 0){
-    const ppg = (stat.points / stat.games).toFixed(1);
+    const ppg = (stat.points / stat.games).toFixed(2);
     return `${p.name} (${p.pos}, ${stat.points} pts over ${stat.games} games this season, ${ppg} ppg)`;
   }
   return `${p.name} (${p.pos}, no season stats logged yet)`;
@@ -2150,7 +2138,12 @@ function renderStats(){
   let rows = Object.keys(combined).map(pKey=>{
     const c = combined[pKey];
     if(!cat.positions.includes(normalizePos(c.pos))) return null;
-    const row = { pKey, name: c.name, pos: c.pos, teamCount: c.teamKeys.length, teamKeys: c.teamKeys, gp: c.gp, gs: c.gs, points: c.points };
+    const primaryOwnerId = c.teamKeys[0] ? c.teamKeys[0].split('::')[1] : null;
+    const primaryOwner = data.owners.find(o=>o.id === primaryOwnerId);
+    const row = {
+      pKey, name: c.name, pos: c.pos, teamCount: c.teamKeys.length, teamKeys: c.teamKeys, gs: c.gs, points: c.points,
+      ownerId: primaryOwnerId, team: primaryOwner ? (primaryOwner.team || primaryOwner.name) : ''
+    };
     cat.cols.forEach(col=>{ row[col.k] = c.raw[col.k] || 0; });
     return row;
   }).filter(Boolean);
@@ -2163,7 +2156,7 @@ function renderStats(){
   });
 
   const headCols = [
-    { k:'name', l:'Player' }, { k:'gp', l:'GP' }, { k:'gs', l:'GS' },
+    { k:'team', l:'Team' }, { k:'name', l:'Player' }, { k:'gs', l:'GS' },
     ...cat.cols.map(c=>({ k:c.k, l:c.l })),
     { k:'points', l:'FPTS' }
   ];
@@ -2177,11 +2170,11 @@ function renderStats(){
     body.innerHTML = rows.map(r=>{
       const mainRow = `
         <tr>
+          <td>${r.ownerId ? teamLogoHTML(r.ownerId, currentSeason) : ''} ${r.team}</td>
           <td>${r.teamCount > 1 ? `<button class="expand-toggle" data-expand="${r.pKey}">▸</button>` : ''}${r.name}${r.teamCount > 1 ? ` <span class="hint" style="display:inline;">(${r.teamCount} teams)</span>` : ''}</td>
-          <td class="num">${r.gp}</td>
           <td class="num">${r.gs}</td>
           ${cat.cols.map(c=>`<td class="num">${r[c.k]}</td>`).join('')}
-          <td class="num">${r.points.toFixed(1)}</td>
+          <td class="num">${r.points.toFixed(2)}</td>
         </tr>
       `;
       let splitRows = '';
@@ -2191,11 +2184,11 @@ function renderStats(){
           const owner = data.owners.find(o=>o.id === tr.ownerId);
           return `
             <tr class="split-row" data-parent="${r.pKey}" style="display:none;">
-              <td style="padding-left:1.6rem;">${owner ? (owner.team || owner.name) : 'Unknown team'}</td>
-              <td class="num">${tr.gp}</td>
+              <td>${teamLogoHTML(tr.ownerId, currentSeason)} ${owner ? (owner.team || owner.name) : 'Unknown team'}</td>
+              <td style="padding-left:1rem; color:var(--ink-soft);">↳ ${r.name}</td>
               <td class="num">${tr.gs}</td>
               ${cat.cols.map(c=>`<td class="num">${tr.raw[c.k] || 0}</td>`).join('')}
-              <td class="num">${tr.points.toFixed(1)}</td>
+              <td class="num">${tr.points.toFixed(2)}</td>
             </tr>
           `;
         }).join('');
@@ -2291,6 +2284,7 @@ function renderSeasonStandings(){
     head.innerHTML = '';
     body.innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
     document.getElementById('standingsBracket').innerHTML = '';
+    document.getElementById('standingsScenarios').innerHTML = '';
     return;
   }
 
@@ -2299,7 +2293,7 @@ function renderSeasonStandings(){
   const anyPlayed = (data.schedule[currentSeason] || []).some(isPlayed);
 
   head.innerHTML = `
-    <th>#</th><th>Owner</th><th>Team</th><th class="num">W</th><th class="num">L</th>
+    <th>#</th><th>Team</th><th class="num">W</th><th class="num">L</th>
     ${anyTies ? '<th class="num">T</th>' : ''}
     <th class="num">PF</th><th class="num">PA</th><th class="num">DIFF</th>
   `;
@@ -2307,26 +2301,33 @@ function renderSeasonStandings(){
   let html = '';
   rows.forEach((r, i)=>{
     if(anyPlayed && i === 8){
-      html += `<tr class="playoff-divider"><td colspan="${anyTies ? 8 : 7}">Playoff line — top 8</td></tr>`;
+      html += `<tr class="playoff-divider"><td colspan="${anyTies ? 7 : 6}">Playoff line — top 8</td></tr>`;
     }
     const diff = r.rec.pf - r.rec.pa;
     html += `
       <tr>
         <td>${i+1}</td>
-        <td>${r.owner.name}</td>
         <td>${r.owner.team}</td>
         <td class="num">${r.rec.wins}</td>
         <td class="num">${r.rec.losses}</td>
         ${anyTies ? `<td class="num">${r.rec.ties}</td>` : ''}
-        <td class="num">${r.rec.pf.toFixed(1)}</td>
-        <td class="num">${r.rec.pa.toFixed(1)}</td>
-        <td class="num">${diff > 0 ? '+' : ''}${diff.toFixed(1)}</td>
+        <td class="num">${r.rec.pf.toFixed(2)}</td>
+        <td class="num">${r.rec.pa.toFixed(2)}</td>
+        <td class="num">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</td>
       </tr>
     `;
   });
   body.innerHTML = html;
 
   renderPlayoffBracket(document.getElementById('standingsBracket'), currentSeason);
+
+  const eliminated = data.owners.length >= 8 ? computeEliminations(currentSeason) : [];
+  document.getElementById('standingsScenarios').innerHTML = `
+    <h2 class="section-title" style="margin-top:1.4rem;">Playoff Clinching Scenarios</h2>
+    <p>N/A</p>
+    <h2 class="section-title" style="margin-top:1.4rem;">Possible Eliminations</h2>
+    <p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>
+  `;
 }
 
 function teamLogoHTML(ownerId, year){
@@ -2751,6 +2752,12 @@ function renderScheduleList(){
   const byWeek = {};
   games.forEach(g=>{ (byWeek[g.week] = byWeek[g.week] || []).push(g); });
 
+  function recordEnteringWeekLabel(year, ownerId, week){
+    const table = computeStandings(year, week - 1);
+    const rec = table[ownerId] || { wins:0, losses:0, ties:0 };
+    return rec.ties > 0 ? `(${rec.wins}-${rec.losses}-${rec.ties})` : `(${rec.wins}-${rec.losses})`;
+  }
+
   function scheduleGameLine(g, side){
     const ownerId = side === 'home' ? g.homeId : g.awayId;
     const other = side === 'home' ? g.awayScore : g.homeScore;
@@ -2763,6 +2770,7 @@ function renderScheduleList(){
         <span class="game-score ${won?'winner':''} ${lost?'loser':''}">${played ? mine.toFixed(2) : '–'}</span>
         ${teamLogoHTML(ownerId, currentSeason)}
         <span class="game-team-name">${teamLabel(ownerId)}</span>
+        <span class="game-team-record">${recordEnteringWeekLabel(currentSeason, ownerId, g.week)}</span>
       </div>
     `;
   }
@@ -2874,7 +2882,7 @@ function renderGameDetail(){
       <div class="player-stat-block" data-block-owner="${ownerId}" data-block-name="${p.name}">
         <div class="player-stat-head">
           <span>${p.name} <span class="pos-tag">${p.pos}</span></span>
-          <span class="player-pts">${(entry.points || 0).toFixed(1)} pts</span>
+          <span class="player-pts">${(entry.points || 0).toFixed(2)} pts</span>
         </div>
         ${editMode ? `
           <label class="started-toggle">
@@ -2887,6 +2895,19 @@ function renderGameDetail(){
           : ''}
       </div>
     `;
+  }
+
+  function renderTeamPlayers(ownerId, roster){
+    if(roster.length === 0) return '<p class="hint">No roster for this team as of this week</p>';
+    const starters = [], bench = [];
+    roster.forEach(p=>{
+      const entry = (game.stats[ownerId] || {})[statKey(p.name)];
+      const started = entry ? entry.started !== false : true;
+      (started ? starters : bench).push(p);
+    });
+    return starters.map(p=> playerBlock(ownerId, p)).join('')
+      + (bench.length ? '<div class="bench-divider">Bench</div>' : '')
+      + bench.map(p=> playerBlock(ownerId, p)).join('');
   }
 
   root.innerHTML = `
@@ -2914,10 +2935,10 @@ function renderGameDetail(){
     </div>
     <div class="game-detail-grid">
       <div class="card" style="padding:.6rem .9rem;">
-        ${homeRoster.map(p=>playerBlock(game.homeId, p)).join('') || '<p class="hint">No roster for this team as of this week</p>'}
+        ${renderTeamPlayers(game.homeId, homeRoster)}
       </div>
       <div class="card" style="padding:.6rem .9rem;">
-        ${awayRoster.map(p=>playerBlock(game.awayId, p)).join('') || '<p class="hint">No roster for this team as of this week</p>'}
+        ${renderTeamPlayers(game.awayId, awayRoster)}
       </div>
     </div>
   `;
@@ -2954,7 +2975,7 @@ function renderGameDetail(){
       const ptsEl = block ? block.querySelector('.player-pts') : null;
       if(ptsEl){
         const updated = (game.stats[ownerId][statKey(name)] || { points: 0 }).points;
-        ptsEl.textContent = `${updated.toFixed(1)} pts`;
+        ptsEl.textContent = `${updated.toFixed(2)} pts`;
       }
     }
 
@@ -2962,7 +2983,10 @@ function renderGameDetail(){
       input.addEventListener('blur', ()=> recomputeEntry(input.dataset.owner, input.dataset.name, input.dataset.pos));
     });
     root.querySelectorAll('.started-input').forEach(input=>{
-      input.addEventListener('change', ()=> recomputeEntry(input.dataset.owner, input.dataset.name, input.dataset.pos));
+      input.addEventListener('change', ()=>{
+        recomputeEntry(input.dataset.owner, input.dataset.name, input.dataset.pos);
+        renderGameDetail();
+      });
     });
 
     const lockBtn = document.getElementById('lockGameBtn');
@@ -3231,16 +3255,16 @@ function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
     const pct = Math.abs(diff) / total;
     if(pct < 0.12){
       verdict = 'Fair trade';
-      summary = `Roughly even value once roster context is factored in — ${nameA} sends ~${sumA.toFixed(1)} adjusted PPG, ${nameB} sends ~${sumB.toFixed(1)} adjusted PPG.`;
+      summary = `Roughly even value once roster context is factored in — ${nameA} sends ~${sumA.toFixed(2)} adjusted PPG, ${nameB} sends ~${sumB.toFixed(2)} adjusted PPG.`;
     } else if(diff > 0){
       verdict = `Good for ${nameA}`;
-      summary = `${nameA} is taking on more real lineup value than they're giving up (~${sumB.toFixed(1)} adjusted PPG in vs ~${sumA.toFixed(1)} out).`;
+      summary = `${nameA} is taking on more real lineup value than they're giving up (~${sumB.toFixed(2)} adjusted PPG in vs ~${sumA.toFixed(2)} out).`;
     } else {
       verdict = `Good for ${nameB}`;
-      summary = `${nameB} is taking on more real lineup value than they're giving up (~${sumA.toFixed(1)} adjusted PPG in vs ~${sumB.toFixed(1)} out).`;
+      summary = `${nameB} is taking on more real lineup value than they're giving up (~${sumA.toFixed(2)} adjusted PPG in vs ~${sumB.toFixed(2)} out).`;
     }
     if(anyDiscounted){
-      summary += ` (Raw PPG was ${rawSumA.toFixed(1)} vs ${rawSumB.toFixed(1)} — adjusted down for players buried on the bench behind teammates at the same position.)`;
+      summary += ` (Raw PPG was ${rawSumA.toFixed(2)} vs ${rawSumB.toFixed(2)} — adjusted down for players buried on the bench behind teammates at the same position.)`;
     }
   }
 
@@ -3277,7 +3301,7 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
         suggestions.push({
           aSends: [aPick.p.name],
           bSends: [bPick.p.name],
-          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Adjusted values are close (${aPick.val.toFixed(1)} vs ${bPick.val.toFixed(1)} PPG).`
+          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Adjusted values are close (${aPick.val.toFixed(2)} vs ${bPick.val.toFixed(2)} PPG).`
         });
       }
     });
