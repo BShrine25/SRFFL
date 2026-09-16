@@ -134,6 +134,9 @@
   .card table td, .card table th{ padding:.45rem .7rem; }
   .num{ text-align:right; font-variant-numeric:tabular-nums; }
   #statsTable .num{ text-align:center; }
+  #standingsSeasonTable .num{ text-align:center; }
+  .team-cell{ display:flex; align-items:center; gap:.4rem; }
+  @media (max-width:700px){ .team-cell-name{ display:none; } }
 
   .ledger-item{ padding:.75rem .9rem; border-bottom:1px solid var(--line); }
   .ledger-item:last-child{ border-bottom:none; }
@@ -399,13 +402,13 @@
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="rosters">Rosters</button>
     <button class="tab" data-tab="schedule">Schedule</button>
-    <button class="tab" data-tab="transactions">Transactions</button>
     <button class="tab" data-tab="standings">Standings</button>
     <button class="tab" data-tab="stats">Stats</button>
-    <button class="tab" data-tab="records">Record Book</button>
     <button class="tab" data-tab="digest">SRFFL Digest</button>
-    <button class="tab" data-tab="tradesim">Trade Sim</button>
     <button class="tab" data-tab="powerrankings">Power Rankings</button>
+    <button class="tab" data-tab="transactions">Transactions</button>
+    <button class="tab" data-tab="records">Record Book</button>
+    <button class="tab" data-tab="tradesim">Trade Sim</button>
   </nav>
 </header>
 
@@ -416,6 +419,9 @@
     <button class="btn small" id="addSeasonBtn">+ Add season</button>
   </div>
   <div class="toolbar-right" style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+    <button class="btn small" id="backupBtn">Backup data</button>
+    <button class="btn small" id="restoreBtn" style="display:none;">Restore backup</button>
+    <input type="file" id="restoreInput" accept=".json,application/json" style="display:none;">
     <button class="btn small" id="fixImagesBtn" style="display:none;">Move images to storage</button>
     <button class="btn small" id="changePinBtn" style="display:none;">Change PIN</button>
     <button class="btn" id="editToggle">Edit mode: Off</button>
@@ -642,17 +648,7 @@ function defaultData(){
   };
 }
 
-async function loadData(){
-  try{
-    if(!sb) throw new Error('Supabase not configured');
-    const { data: row, error } = await sb.from('league_data').select('data').eq('id', 'main').single();
-    if(error) throw error;
-    data = (row && row.data && Object.keys(row.data).length) ? row.data : defaultData();
-  }catch(e){
-    data = defaultData();
-    if(!sb) toast('Supabase isn\'t configured yet — running on local defaults only.');
-    else toast('Could not load league data — check your connection.');
-  }
+function applyDataDefaults(){
   if(!data.seasons || !data.seasons.length){ data.seasons = [new Date().getFullYear()]; }
   if(!data.digest) data.digest = {};
   if(data.currentDigest === undefined) data.currentDigest = null;
@@ -668,6 +664,20 @@ async function loadData(){
   currentDigestWeek = data.currentDigest ? data.currentDigest.week : '1A';
 }
 
+async function loadData(){
+  try{
+    if(!sb) throw new Error('Supabase not configured');
+    const { data: row, error } = await sb.from('league_data').select('data').eq('id', 'main').single();
+    if(error) throw error;
+    data = (row && row.data && Object.keys(row.data).length) ? row.data : defaultData();
+  }catch(e){
+    data = defaultData();
+    if(!sb) toast('Supabase isn\'t configured yet — running on local defaults only.');
+    else toast('Could not load league data — check your connection.');
+  }
+  applyDataDefaults();
+}
+
 async function saveData(){
   if(!sb){ toast('Supabase isn\'t configured yet.'); return; }
   const payloadKB = Math.round(new Blob([JSON.stringify(data)]).size / 1024);
@@ -680,6 +690,34 @@ async function saveData(){
   }catch(e){
     toast('Save failed: ' + (e.message || 'check your connection') + '. Your change is NOT saved — do not close this tab.');
   }
+}
+
+function exportFullBackup(){
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadTextFile(JSON.stringify(data, null, 2), `srffl-hub-backup-${stamp}.json`, 'application/json');
+  toast('Backup downloaded.');
+}
+
+async function importFullBackup(file){
+  let parsed;
+  try{
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  }catch(e){
+    toast('That file isn\'t valid backup JSON.');
+    return;
+  }
+  if(!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.owners)){
+    toast('That doesn\'t look like a srffl-hub backup file.');
+    return;
+  }
+  if(!confirm('This will REPLACE ALL current data — rosters, scores, stats, everything — with this backup file. This cannot be undone. Continue?')) return;
+  data = parsed;
+  applyDataDefaults();
+  await saveData();
+  refreshAllPanels();
+  renderSeasonSelect();
+  toast('Backup restored.');
 }
 
 async function uploadImageToStorage(file){
@@ -2051,7 +2089,7 @@ function playerStatLine(p){
   const stat = getPlayerStat(currentSeason, p.name);
   if(stat && stat.games > 0){
     const ppg = (stat.points / stat.games).toFixed(2);
-    return `${p.name} (${p.pos}, ${stat.points} pts over ${stat.games} games this season, ${ppg} ppg)`;
+    return `${p.name} (${p.pos}, ${stat.points.toFixed(2)} pts over ${stat.games} games this season, ${ppg} ppg)`;
   }
   return `${p.name} (${p.pos}, no season stats logged yet)`;
 }
@@ -2156,12 +2194,12 @@ function renderStats(){
   });
 
   const headCols = [
-    { k:'team', l:'Team' }, { k:'name', l:'Player' }, { k:'gs', l:'GS' },
-    ...cat.cols.map(c=>({ k:c.k, l:c.l })),
-    { k:'points', l:'FPTS' }
+    { k:'team', l:'Team' }, { k:'name', l:'Player' }, { k:'gs', l:'GS', num:true },
+    ...cat.cols.map(c=>({ k:c.k, l:c.l, num:true })),
+    { k:'points', l:'FPTS', num:true }
   ];
   head.innerHTML = headCols.map(c=>`
-    <th class="${c.k === statsSortCol ? 'sorted' : ''}" data-sort="${c.k}">${c.l}${c.k === statsSortCol ? `<span class="sort-arrow">${statsSortDir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>
+    <th class="${c.num ? 'num' : ''} ${c.k === statsSortCol ? 'sorted' : ''}" data-sort="${c.k}">${c.l}${c.k === statsSortCol ? `<span class="sort-arrow">${statsSortDir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>
   `).join('');
 
   if(rows.length === 0){
@@ -2301,13 +2339,13 @@ function renderSeasonStandings(){
   let html = '';
   rows.forEach((r, i)=>{
     if(anyPlayed && i === 8){
-      html += `<tr class="playoff-divider"><td colspan="${anyTies ? 7 : 6}">Playoff line — top 8</td></tr>`;
+      html += `<tr class="playoff-divider"><td colspan="${anyTies ? 8 : 7}">Playoff line — top 8</td></tr>`;
     }
     const diff = r.rec.pf - r.rec.pa;
     html += `
       <tr>
         <td>${i+1}</td>
-        <td>${r.owner.team}</td>
+        <td><span class="team-cell">${teamLogoHTML(r.owner.id, currentSeason)}<span class="team-cell-name">${r.owner.team}</span></span></td>
         <td class="num">${r.rec.wins}</td>
         <td class="num">${r.rec.losses}</td>
         ${anyTies ? `<td class="num">${r.rec.ties}</td>` : ''}
@@ -2690,7 +2728,7 @@ function renderPowerRankingsTab(){
   document.getElementById('prTableBody').innerHTML = rows.map((r, i)=> `
     <tr>
       <td>${i+1}</td>
-      <td>${r.owner.team || r.owner.name}</td>
+      <td><span class="team-cell">${teamLogoHTML(r.owner.id, currentSeason)}<span class="team-cell-name">${r.owner.team || r.owner.name}</span></span></td>
       <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''} (${r.recordPts.toFixed(1)})</td>
       <td class="num">${r.rec.pf.toFixed(1)} (${r.pfPts.toFixed(1)})</td>
       <td class="num">${r.rec.apWins.toFixed(1)}-${r.rec.apLosses.toFixed(1)}${r.rec.apTies ? '-'+r.rec.apTies.toFixed(1) : ''} (${r.apPts.toFixed(1)})</td>
@@ -3487,10 +3525,20 @@ document.getElementById('editToggle').addEventListener('click', ()=>{
   btn.classList.toggle('btn-primary', editMode);
   document.getElementById('changePinBtn').style.display = editMode ? 'inline-block' : 'none';
   document.getElementById('fixImagesBtn').style.display = editMode ? 'inline-block' : 'none';
+  document.getElementById('restoreBtn').style.display = editMode ? 'inline-block' : 'none';
   refreshAllPanels();
 });
 
 document.getElementById('fixImagesBtn').addEventListener('click', migrateBase64ImagesToStorage);
+document.getElementById('backupBtn').addEventListener('click', exportFullBackup);
+document.getElementById('restoreBtn').addEventListener('click', ()=>{
+  document.getElementById('restoreInput').click();
+});
+document.getElementById('restoreInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(file) importFullBackup(file);
+});
 
 document.getElementById('changePinBtn').addEventListener('click', ()=>{
   const current = prompt('Enter current PIN:');
