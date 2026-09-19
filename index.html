@@ -207,14 +207,18 @@
   .side-logo.editable:hover{ border-color:var(--mustard); }
   .side-logo img{ width:100%; height:100%; object-fit:cover; }
   .side-name{ font-family:'Anton',sans-serif; font-size:.92rem; line-height:1.1; }
+  .side-team-select{ font-family:'Anton',sans-serif; font-size:.82rem; width:100%; padding:.2rem; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); }
   .side-record{ font-size:.75rem; color:var(--ink-soft); }
   .vs-label{ font-family:'Anton',sans-serif; color:var(--ink-soft); font-size:.8rem; flex-shrink:0; }
 
   .matchup-writeup{ font-size:.88rem; margin-bottom:.9rem; }
-  .positions-table{ width:100%; margin-bottom:.7rem; border-collapse:collapse; }
-  .positions-table td{ border-bottom:1px solid var(--line); padding:.35rem .4rem; }
-  .pos-label{ text-align:center; font-size:.72rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; width:64px; }
-  .check-cell{ width:38%; text-align:center; }
+  .positions-table{ width:100%; margin-bottom:.7rem; border-collapse:collapse; table-layout:fixed; }
+  .positions-table td{ border-bottom:1px solid var(--line); padding:.35rem .3rem; }
+  .pos-label{ text-align:center; font-size:.68rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.02em; width:20%; }
+  .check-cell{ width:11%; text-align:center; }
+  .pos-player-cell{ width:29%; text-align:center; }
+  .pos-player-select{ width:100%; font-size:.68rem; padding:.15rem; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); }
+  .pos-player{ font-size:.72rem; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .check-btn{ width:26px; height:26px; border-radius:50%; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:.8rem; line-height:24px; color:transparent; }
   .check-btn.active{ background:var(--mustard); border-color:var(--mustard); color:var(--field); }
   .pos-del{ color:var(--red); background:none; border:none; cursor:pointer; font-size:.85rem; }
@@ -1157,7 +1161,7 @@ function renderRecords(){
 
 /* ---------- SRFFL Digest ---------- */
 
-const DEFAULT_POSITIONS = ['QB','RB','WR','TE','FLEX','DST','K'];
+const DEFAULT_POSITIONS = ['QB','RB','RB/WR','WR/TE','WR/TE','TE','DEF','K'];
 let digestPageIndex = 0;
 let digestFullscreenOpen = false;
 
@@ -1178,13 +1182,23 @@ function blankMatchup(){
   return {
     id: uid(),
     gotw: false,
-    teamA: { logo:'', name:'', record:'' },
-    teamB: { logo:'', name:'', record:'' },
+    teamA: { ownerId:'', logo:'', name:'', record:'' },
+    teamB: { ownerId:'', logo:'', name:'', record:'' },
     writeup: '',
-    positions: DEFAULT_POSITIONS.map(p=>({ id: uid(), label: p, edge: null })),
+    positions: DEFAULT_POSITIONS.map(p=>({ id: uid(), label: p, edge: null, playerA:'', playerB:'' })),
     line: '',
     prediction: ''
   };
+}
+
+function slotEligiblePositions(label){
+  return (label || '').split('/').map(part=> normalizePos(part)).filter(p=> p !== 'OTHER');
+}
+
+function getMatchupSideRoster(m, side, year){
+  const team = side === 'A' ? m.teamA : m.teamB;
+  if(!team.ownerId) return [];
+  return (data.rosters[year] && data.rosters[year][team.ownerId]) || [];
 }
 
 function digestEntry(year, weekKey){
@@ -1433,9 +1447,11 @@ function matchupCardHTML(m, isGotw){
       <table class="positions-table"><tbody>
         ${m.positions.map(p=>`
           <tr>
+            <td class="pos-player-cell">${positionPlayerSelectHTML(m, p, 'A')}</td>
             <td class="check-cell"><button class="check-btn ${p.edge==='A'?'active':''}" data-mid="${m.id}" data-pid="${p.id}" data-side="A" ${editMode?'':'disabled'}>✓</button></td>
             <td class="pos-label">${p.label}${editMode?` <button class="pos-del" data-mid="${m.id}" data-pid="${p.id}">×</button>`:''}</td>
             <td class="check-cell"><button class="check-btn ${p.edge==='B'?'active':''}" data-mid="${m.id}" data-pid="${p.id}" data-side="B" ${editMode?'':'disabled'}>✓</button></td>
+            <td class="pos-player-cell">${positionPlayerSelectHTML(m, p, 'B')}</td>
           </tr>
         `).join('')}
       </tbody></table>
@@ -1460,15 +1476,40 @@ function matchupCardHTML(m, isGotw){
 
 function teamSideHTML(m, side){
   const team = side === 'A' ? m.teamA : m.teamB;
+  const owner = team.ownerId ? data.owners.find(o=>o.id === team.ownerId) : null;
+  const displayName = owner ? (owner.team || owner.name) : (team.name || 'Team name');
+  const nameBlock = editMode
+    ? `<select class="side-team-select" data-mid="${m.id}" data-side="${side}">
+        <option value="">— Select team —</option>
+        ${data.owners.map(o=>`<option value="${o.id}" ${o.id === team.ownerId ? 'selected' : ''}>${o.team || o.name}</option>`).join('')}
+      </select>`
+    : `<div class="side-name">${displayName}</div>`;
   return `
     <div class="team-side">
       <div class="side-logo ${editMode?'editable':''}" data-mid="${m.id}" data-side="${side}" data-logo="1">
         ${team.logo ? `<img src="${team.logo}">` : (editMode ? '+ Logo' : '')}
       </div>
-      <div class="side-name editable-field" data-mid="${m.id}" data-side="${side}" data-field="name" ${editMode?'contenteditable="true"':''}>${team.name || 'Team name'}</div>
+      ${nameBlock}
       <div class="side-record editable-field" data-mid="${m.id}" data-side="${side}" data-field="record" ${editMode?'contenteditable="true"':''}>${team.record || 'Record'}</div>
     </div>
   `;
+}
+
+function positionPlayerSelectHTML(m, p, side){
+  const roster = getMatchupSideRoster(m, side, currentDigestYear);
+  const eligible = slotEligiblePositions(p.label);
+  let candidates = eligible.length ? roster.filter(pl=> eligible.includes(normalizePos(pl.pos))) : roster;
+  const current = side === 'A' ? p.playerA : p.playerB;
+  if(current && !candidates.some(pl=> pl.name === current)){
+    candidates = [{ name: current, pos:'' }, ...candidates];
+  }
+  if(!editMode){
+    return `<div class="pos-player">${current || '—'}</div>`;
+  }
+  const options = ['<option value="">—</option>']
+    .concat(candidates.map(pl=>`<option value="${pl.name}" ${pl.name === current ? 'selected' : ''}>${pl.name}</option>`))
+    .join('');
+  return `<select class="pos-player-select" data-mid="${m.id}" data-pid="${p.id}" data-side="${side}">${options}</select>`;
 }
 
 function findMatchup(entry, id){ return entry.matchups.find(m=>m.id === id); }
@@ -1510,6 +1551,26 @@ function wireMatchupCardEvents(root, entry){
       });
     });
   });
+  root.querySelectorAll('.side-team-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const m = findMatchup(entry, sel.dataset.mid);
+      const team = sel.dataset.side === 'A' ? m.teamA : m.teamB;
+      team.ownerId = sel.value;
+      m.positions.forEach(p=>{
+        if(sel.dataset.side === 'A') p.playerA = ''; else p.playerB = '';
+      });
+      saveData();
+      renderDigest();
+    });
+  });
+  root.querySelectorAll('.pos-player-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const m = findMatchup(entry, sel.dataset.mid);
+      const p = m.positions.find(p=>p.id === sel.dataset.pid);
+      if(sel.dataset.side === 'A') p.playerA = sel.value; else p.playerB = sel.value;
+      saveData();
+    });
+  });
   root.querySelectorAll('.check-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const m = findMatchup(entry, btn.dataset.mid);
@@ -1523,7 +1584,7 @@ function wireMatchupCardEvents(root, entry){
     btn.addEventListener('click', ()=>{
       const m = findMatchup(entry, btn.dataset.addPos);
       const label = prompt('Position label (e.g. QB, RB, WR):', '') || 'POS';
-      m.positions.push({ id: uid(), label, edge: null });
+      m.positions.push({ id: uid(), label, edge: null, playerA:'', playerB:'' });
       saveData();
       renderDigest();
     });
