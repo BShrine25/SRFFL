@@ -1455,7 +1455,7 @@ function matchupCardHTML(m, isGotw){
           </tr>
         `).join('')}
       </tbody></table>
-      ${editMode ? `<div style="text-align:center; margin-bottom:.7rem;"><button class="btn small" data-add-pos="${m.id}">+ Add position row</button></div>` : ''}
+      ${editMode ? `<div style="text-align:center; margin-bottom:.7rem; display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap;"><button class="btn small" data-add-pos="${m.id}">+ Add position row</button><button class="btn small" data-reset-pos="${m.id}">Reset to default positions</button></div>` : ''}
       <div class="line-row">
         <span class="field-label">Vegas Line</span>
         <span class="editable-field" data-mid="${m.id}" data-field="line" ${editMode?'contenteditable="true"':''}>${m.line}</span>
@@ -1585,6 +1585,15 @@ function wireMatchupCardEvents(root, entry){
       const m = findMatchup(entry, btn.dataset.addPos);
       const label = prompt('Position label (e.g. QB, RB, WR):', '') || 'POS';
       m.positions.push({ id: uid(), label, edge: null, playerA:'', playerB:'' });
+      saveData();
+      renderDigest();
+    });
+  });
+  root.querySelectorAll('[data-reset-pos]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('Replace this matchup\'s position rows with the current default list (QB, RB, RB/WR, WR/TE, WR/TE, TE, DEF, K)? Any checks or player picks on the existing rows will be lost.')) return;
+      const m = findMatchup(entry, btn.dataset.resetPos);
+      m.positions = DEFAULT_POSITIONS.map(p=>({ id: uid(), label: p, edge: null, playerA:'', playerB:'' }));
       saveData();
       renderDigest();
     });
