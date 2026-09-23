@@ -289,9 +289,6 @@
 
   /* Power Rankings + chart */
   #prChartRoot, #reviewChartRoot{ min-height:180px; }
-  .pr-chart-legend{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:center; margin-top:.6rem; font-size:.72rem; color:var(--ink-soft); }
-  .pr-chart-legend span{ display:inline-flex; align-items:center; gap:.3rem; }
-  .pr-chart-swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
 
   /* Weekly review report */
   .review-report{ max-width:640px; margin:0 auto; }
@@ -805,6 +802,31 @@ function toast(msg){
 }
 
 function colorFor(idx){ return TEAM_COLORS[idx % TEAM_COLORS.length]; }
+
+function normalizeTeamNameKey(name){
+  return (name || '').toLowerCase().replace(/[\u2018\u2019'`]/g, "'").trim();
+}
+
+const TEAM_NAME_COLORS = {};
+[
+  ["Steel City Rage", "#C0392B"],
+  ["Kong's Barrel Throwers", "#6F4E37"],
+  ["Funky White Boys", "#1B2A4A"],
+  ["Browns Mills Millionaires", "#2E7D32"],
+  ["It's All Love, My Njigba", "#D4AF37"],
+  ["Pittsburgh Pranksters", "#E8C900"],
+  ["Blitzburgh Bandits", "#111111"],
+  ["Kentucky Fried Chicken", "#FFFFFF"],
+  ["Taco Flavored Kisses", "#FFB612"],
+  ["Oh No I Suck Again", "#808080"],
+  ["League's Okayest Team", "#7F1734"],
+  ["Big Baby Blunt Blowers", "#556B2F"]
+].forEach(([name, color])=>{ TEAM_NAME_COLORS[normalizeTeamNameKey(name)] = color; });
+
+function colorForTeam(name, fallbackIdx){
+  const key = normalizeTeamNameKey(name);
+  return TEAM_NAME_COLORS[key] || colorFor(fallbackIdx);
+}
 
 function fixEditableContrast(){
   document.querySelectorAll('[contenteditable="true"], .editable-field').forEach(el=>{
@@ -2757,15 +2779,15 @@ function renderPowerTrendChart(container, year, throughWeek){
   const weeks = Array.from({ length: throughWeek }, (_, i)=> i + 1);
   const series = data.owners.map((o, idx)=>({
     owner: o,
-    color: colorFor(idx),
+    color: colorForTeam(o.team || o.name, idx),
     values: weeks.map(w=> computePowerRankings(year, w).find(r=> r.owner.id === o.id)?.composite ?? 0)
   }));
 
   const allVals = series.flatMap(s=> s.values);
   const maxV = Math.max(...allVals, 1);
   const minV = Math.min(...allVals, 0);
-  const padTop = 10, padBottom = 24, padLeft = 28, padRight = 10;
-  const w = 600, h = 260;
+  const padTop = 10, padBottom = 24, padLeft = 28, padRight = 132;
+  const w = 720, h = 280 + (data.owners.length * 2);
   const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
 
   const xFor = (i)=> padLeft + (weeks.length === 1 ? plotW/2 : (i/(weeks.length-1)) * plotW);
@@ -2773,30 +2795,31 @@ function renderPowerTrendChart(container, year, throughWeek){
 
   const lines = series.map(s=>{
     const pts = s.values.map((v,i)=> `${xFor(i)},${yFor(v)}`).join(' ');
+    const halo = s.values.length > 1
+      ? `<polyline points="${pts}" fill="none" stroke="#00000030" stroke-width="4"/>`
+      : '';
     const polyline = s.values.length > 1
-      ? `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" opacity="0.9"/>`
+      ? `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2"/>`
       : '';
     const dots = s.values.map((v,i)=>
-      `<circle cx="${xFor(i)}" cy="${yFor(v)}" r="4" fill="${s.color}" stroke="#fff" stroke-width="1"/>` +
-      (weeks.length === 1 ? `<text x="${xFor(i)+8}" y="${yFor(v)+3}" font-size="9" fill="${s.color}">${s.owner.team || s.owner.name}</text>` : '')
+      `<circle cx="${xFor(i)}" cy="${yFor(v)}" r="4" fill="${s.color}" stroke="var(--ink)" stroke-width="1"/>`
     ).join('');
-    return polyline + dots;
+    const lastIdx = s.values.length - 1;
+    const label = `<text x="${xFor(lastIdx)+8}" y="${yFor(s.values[lastIdx])+3}" font-size="9" fill="var(--ink)">${s.owner.team || s.owner.name}</text>`;
+    return halo + polyline + dots + label;
   }).join('');
 
   const xLabels = weeks.map((wk,i)=> `<text x="${xFor(i)}" y="${h-6}" font-size="10" fill="#5b5847" text-anchor="middle">W${wk}</text>`).join('');
   const yTicks = [minV, (minV+maxV)/2, maxV].map(v=> `<text x="${padLeft-6}" y="${yFor(v)+3}" font-size="10" fill="#5b5847" text-anchor="end">${v.toFixed(0)}</text>`).join('');
 
   container.innerHTML = `
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block; min-height:180px;">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block; min-height:${h}px;">
       <line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${h-padBottom}" stroke="#D9D1B8"/>
       <line x1="${padLeft}" y1="${h-padBottom}" x2="${w-padRight}" y2="${h-padBottom}" stroke="#D9D1B8"/>
       ${yTicks}
       ${xLabels}
       ${lines}
     </svg>
-    <div class="pr-chart-legend">
-      ${series.map(s=> `<span><span class="pr-chart-swatch" style="background:${s.color}"></span>${s.owner.team || s.owner.name}</span>`).join('')}
-    </div>
   `;
 }
 
