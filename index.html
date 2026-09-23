@@ -3072,7 +3072,7 @@ function renderGameDetail(){
       const startedInput = root.querySelector(`.started-input[data-owner="${CSS.escape(ownerId)}"][data-name="${CSS.escape(name)}"]`);
       const started = startedInput ? startedInput.checked : true;
       if(!game.stats[ownerId]) game.stats[ownerId] = {};
-      if(Object.keys(raw).length === 0){
+      if(Object.keys(raw).length === 0 && started){
         delete game.stats[ownerId][statKey(name)];
       } else {
         const points = computeFantasyPoints(normPos, raw);
