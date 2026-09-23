@@ -190,7 +190,8 @@
 
   .digest-article{ max-width:640px; margin:0 auto 1.6rem; }
   .digest-article h3{ font-size:1rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.3rem; margin-bottom:.5rem; }
-  .digest-article .body-text{ font-size:.92rem; white-space:pre-wrap; min-height:1.4em; }
+  .body-text{ white-space:pre-wrap; }
+  .digest-article .body-text{ font-size:.92rem; min-height:1.4em; }
   .digest-article .body-text:empty::before{ content:attr(data-placeholder); color:var(--ink-soft); font-style:italic; }
 
   .matchup-card{ max-width:640px; margin:0 auto 1.2rem; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.1rem; }
@@ -243,7 +244,7 @@
   .team-page h4{ font-size:.85rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.25rem; margin:1rem 0 .6rem; }
   .key-player-row{ margin-bottom:.7rem; display:flex; gap:.6rem; align-items:flex-start; }
   .key-player-row .kp-name{ font-family:'Anton',sans-serif; font-size:.9rem; display:block; margin-bottom:.15rem; }
-  .key-player-row .kp-summary{ font-size:.82rem; }
+  .key-player-row .kp-summary{ font-size:.82rem; white-space:pre-wrap; }
   .kp-photo{ width:44px; height:44px; border-radius:6px; background:var(--chalk-2); border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:.8rem; color:var(--ink-soft); flex-shrink:0; }
   .kp-photo.editable{ cursor:pointer; }
   .kp-photo img{ width:100%; height:100%; object-fit:cover; }
@@ -1234,6 +1235,7 @@ function buildDigestPages(entry, weekKey){
     pages.push({ kind:'bracket' });
   } else {
     pages.push({ kind:'reviewtext' });
+    pages.push({ kind:'reviewstats' });
   }
   return pages;
 }
@@ -1335,32 +1337,19 @@ function renderDigestPageContent(entry, page, containerId){
     root.innerHTML = bracketPageHTML(entry);
     wireBracketPageEvents(root, entry);
   } else if(page.kind === 'reviewtext'){
-    root.innerHTML = renderWeeklyReviewReport(entry);
-    wireWeeklyReviewEvents(root, entry);
+    root.innerHTML = renderWeeklyReviewNarrative(entry);
+    wireWeeklyReviewNarrativeEvents(root, entry);
+  } else if(page.kind === 'reviewstats'){
+    root.innerHTML = renderWeeklyReviewStats(entry);
+    wireWeeklyReviewStatsEvents(root, entry);
   }
   fixEditableContrast();
 }
 
-function renderWeeklyReviewReport(entry){
+function renderWeeklyReviewNarrative(entry){
   const week = parseInt(currentDigestWeek, 10) || 1;
   const year = currentDigestYear;
   const games = (data.schedule[year] || []).filter(g=> g.week === week);
-  const standings = orderedStandings(year, week);
-  const top8 = standings.slice(0, 8);
-  const rest = standings.slice(8);
-  const eliminated = data.owners.length >= 8 ? computeEliminations(year, week) : [];
-  const pr = data.owners.length ? computePowerRankings(year, week) : [];
-
-  function standingsRows(rows, offset){
-    return rows.map((r,i)=>`
-      <tr>
-        <td>${offset + i + 1}</td>
-        <td>${r.owner.team || r.owner.name}</td>
-        <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''}</td>
-        <td class="num">${r.rec.pf.toFixed(2)}</td>
-      </tr>
-    `).join('');
-  }
 
   function gameLine(g, side){
     const ownerId = side === 'home' ? g.homeId : g.awayId;
@@ -1394,7 +1383,43 @@ function renderWeeklyReviewReport(entry){
 
       <h3>Recap</h3>
       <div class="body-text editable-field" id="reviewText" data-placeholder="Write this week's recap..." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
+    </div>
+  `;
+}
 
+function wireWeeklyReviewNarrativeEvents(root, entry){
+  if(!editMode) return;
+  const reviewEl = document.getElementById('reviewText');
+  if(reviewEl){
+    reviewEl.addEventListener('blur', (e)=>{
+      entry.review = e.target.innerHTML.trim();
+      saveData();
+    });
+  }
+}
+
+function renderWeeklyReviewStats(entry){
+  const week = parseInt(currentDigestWeek, 10) || 1;
+  const year = currentDigestYear;
+  const standings = orderedStandings(year, week);
+  const top8 = standings.slice(0, 8);
+  const rest = standings.slice(8);
+  const eliminated = data.owners.length >= 8 ? computeEliminations(year, week) : [];
+  const pr = data.owners.length ? computePowerRankings(year, week) : [];
+
+  function standingsRows(rows, offset){
+    return rows.map((r,i)=>`
+      <tr>
+        <td>${offset + i + 1}</td>
+        <td>${r.owner.team || r.owner.name}</td>
+        <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''}</td>
+        <td class="num">${r.rec.pf.toFixed(2)}</td>
+      </tr>
+    `).join('');
+  }
+
+  return `
+    <div class="review-report">
       <h3>Playoff Standings</h3>
       <div class="card"><table class="review-table"><thead><tr><th>#</th><th>Team</th><th class="num">Record</th><th class="num">PF</th></tr></thead>
       <tbody>${top8.length ? standingsRows(top8, 0) : `<tr><td colspan="4" style="color:var(--ink-soft); font-size:.8rem;">Add teams and scores first</td></tr>`}</tbody></table></div>
@@ -1420,16 +1445,7 @@ function renderWeeklyReviewReport(entry){
   `;
 }
 
-function wireWeeklyReviewEvents(root, entry){
-  if(editMode){
-    const reviewEl = document.getElementById('reviewText');
-    if(reviewEl){
-      reviewEl.addEventListener('blur', (e)=>{
-        entry.review = e.target.textContent;
-        saveData();
-      });
-    }
-  }
+function wireWeeklyReviewStatsEvents(root, entry){
   const week = parseInt(currentDigestWeek, 10) || 1;
   renderPowerTrendChart(document.getElementById('reviewChartRoot'), currentDigestYear, week);
 }
@@ -1514,6 +1530,11 @@ function positionPlayerSelectHTML(m, p, side){
 
 function findMatchup(entry, id){ return entry.matchups.find(m=>m.id === id); }
 
+const RICH_TEXT_FIELDS = ['writeup', 'prediction', 'synopsis', 'summary', 'review', 'bracketNotes'];
+function readFieldValue(el, fieldName){
+  return RICH_TEXT_FIELDS.includes(fieldName) ? el.innerHTML.trim() : el.textContent.trim();
+}
+
 function wireAddMatchupButton(entry){
   const btn = document.getElementById('addMatchupBtn');
   if(!btn) return;
@@ -1529,7 +1550,7 @@ function wireMatchupCardEvents(root, entry){
   root.querySelectorAll('[data-field][data-mid]:not([data-side])').forEach(el=>{
     el.addEventListener('blur', ()=>{
       const m = findMatchup(entry, el.dataset.mid);
-      if(m) m[el.dataset.field] = el.textContent.trim();
+      if(m) m[el.dataset.field] = readFieldValue(el, el.dataset.field);
       saveData();
     });
   });
@@ -1682,13 +1703,13 @@ function wireTeamPageEvents(root, entry, ownerId){
   const tp = ensureTeamPage(entry, ownerId);
   root.querySelectorAll('[data-tp][data-field]:not([data-kp])').forEach(el=>{
     el.addEventListener('blur', ()=>{
-      tp[el.dataset.field] = el.textContent.trim();
+      tp[el.dataset.field] = readFieldValue(el, el.dataset.field);
       saveData();
     });
   });
   root.querySelectorAll('[data-tp][data-kp]').forEach(el=>{
     el.addEventListener('blur', ()=>{
-      tp.keyPlayers[Number(el.dataset.kp)][el.dataset.field] = el.textContent.trim();
+      tp.keyPlayers[Number(el.dataset.kp)][el.dataset.field] = readFieldValue(el, el.dataset.field);
       saveData();
     });
   });
@@ -1790,7 +1811,7 @@ function wireBracketPageEvents(root, entry){
   renderBracketPrediction(document.getElementById('digestBracketRoot'), entry, currentDigestYear);
   if(!editMode) return;
   document.getElementById('bracketNotes').addEventListener('blur', (e)=>{
-    entry.bracketNotes = e.target.textContent;
+    entry.bracketNotes = document.getElementById('bracketNotes').innerHTML.trim();
     saveData();
   });
 }
