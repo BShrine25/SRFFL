@@ -3608,14 +3608,21 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   // Surplus/need only depends on (team, position) — compute it once per position up
   // front instead of re-scanning each roster on every one of the ~47,000 combo checks.
   const surplusA = {}, needA = {}, surplusB = {}, needB = {};
-  // Raw (non bench-discounted) roster counts, used to simulate what each roster looks
-  // like AFTER a trade — depth-adjusted value already reflects the CURRENT lineup, but
-  // "how many warm bodies do I have left at this position" needs the real numbers.
   const totalCountA = {}, totalCountB = {}, aboveReplCountA = {}, aboveReplCountB = {};
+  // The value of the worst CURRENT STARTER at each position — used to tell whether an
+  // incoming player would actually crack the lineup, or just add bench depth behind
+  // someone the team already has. No starters there at all means anyone starts.
+  const starterFloorA = {}, starterFloorB = {};
+
   function rawAboveReplCount(roster, pos){
     return roster.filter(p=> normalizePos(p.pos) === pos)
       .map(p=> playerValue(p))
       .filter(v=> v !== null && (v - (replacementLevels[pos] || 0)) > 0).length;
+  }
+  function starterFloor(roster, starterSet, pos){
+    const vals = roster.filter(p=> normalizePos(p.pos) === pos && starterSet.has(p))
+      .map(p=> playerValue(p)).filter(v=> v !== null);
+    return vals.length ? Math.min(...vals) : -Infinity;
   }
   TRADE_SUGGEST_POSITIONS.forEach(pos=>{
     surplusA[pos] = isSurplus(rosterA, starterSetA, pos, replacementLevels, maxStarters);
@@ -3626,6 +3633,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     totalCountB[pos] = rosterB.filter(p=> normalizePos(p.pos) === pos).length;
     aboveReplCountA[pos] = rawAboveReplCount(rosterA, pos);
     aboveReplCountB[pos] = rawAboveReplCount(rosterB, pos);
+    starterFloorA[pos] = starterFloor(rosterA, starterSetA, pos);
+    starterFloorB[pos] = starterFloor(rosterB, starterSetB, pos);
   });
 
   const trendCache = {};
@@ -3647,7 +3656,7 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
         const pos = normalizePos(p.pos);
         const raw = playerValue(p);
         return {
-          p, pos,
+          p, pos, raw,
           val: depthAdjustedValue(p, starterSet, replacementLevels),
           aboveReplRaw: raw !== null && (raw - (replacementLevels[pos] || 0)) > 0
         };
@@ -3655,6 +3664,16 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
       .filter(x=> x.val !== null)
       .sort((a,b)=> b.val - a.val)
       .slice(0, 8);
+  }
+
+  // What is this player actually worth to the team RECEIVING them, given that team's
+  // own depth chart? If they wouldn't even crack the new team's starting lineup, they're
+  // just bench depth there — full value only applies if they're a real upgrade.
+  function valueToTeam(entry, floorTable){
+    const repl = replacementLevels[entry.pos] || 0;
+    const trueVal = entry.raw - repl;
+    const wouldStart = entry.raw > (floorTable[entry.pos] ?? -Infinity);
+    return { value: wouldStart ? trueVal : trueVal * 0.5, wouldStart };
   }
 
   function combinationsOf(arr, k){
@@ -3751,10 +3770,19 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
 
       listA.forEach(comboA=>{
         listB.forEach(comboB=>{
+          // What each side is giving up, in their OWN current context (unchanged) —
+          // and, critically, what each side is actually GETTING, valued in the
+          // RECEIVING team's context. A player who wouldn't even start on his new
+          // team is only worth half as much to that team, no matter how good he
+          // looked on his old roster.
           const totalA = comboA.reduce((s,x)=> s + x.val, 0);
           const totalB = comboB.reduce((s,x)=> s + x.val, 0);
-          const combinedMag = Math.abs(totalA) + Math.abs(totalB) || 1;
-          const diffPct = Math.abs(totalA - totalB) / combinedMag;
+          const receivedA = comboB.reduce((s,x)=> s + valueToTeam(x, starterFloorA).value, 0);
+          const receivedB = comboA.reduce((s,x)=> s + valueToTeam(x, starterFloorB).value, 0);
+
+          const diffPctA = Math.abs(totalA - receivedA) / (Math.abs(totalA) + Math.abs(receivedA) || 1);
+          const diffPctB = Math.abs(totalB - receivedB) / (Math.abs(totalB) + Math.abs(receivedB) || 1);
+          const diffPct = Math.max(diffPctA, diffPctB);
 
           // Cheap pre-filter first: reject outright unless this is either a normal fair
           // trade, or lopsided enough in someone's favor that it could plausibly justify
@@ -3762,8 +3790,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           // bankruptcy scan for the vast majority of combos that have no shot either way.
           const passesNormalFairness = diffPct <= valueThreshold;
           if(!passesNormalFairness){
-            const edgeForA = (totalB - totalA) / (totalA || 1);
-            const edgeForB = (totalA - totalB) / (totalB || 1);
+            const edgeForA = (receivedA - totalA) / (totalA || 1);
+            const edgeForB = (receivedB - totalB) / (totalB || 1);
             if(edgeForA < 0.35 && edgeForB < 0.35) return;
           }
 
@@ -3777,8 +3805,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           if(hasSevere){
             const aRisking = bankruptcy.severeA.length > 0;
             const bRisking = bankruptcy.severeB.length > 0;
-            const edgeForA = (totalB - totalA) / (totalA || 1);
-            const edgeForB = (totalA - totalB) / (totalB || 1);
+            const edgeForA = (receivedA - totalA) / (totalA || 1);
+            const edgeForB = (receivedB - totalB) / (totalB || 1);
             if(aRisking && edgeForA < 0.35) return;
             if(bRisking && edgeForB < 0.35) return;
           } else if(!passesNormalFairness){
@@ -3797,6 +3825,12 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           const bNames = comboB.map(x=> x.p.name);
           const trendNotes = [...aNames, ...bNames].map(trendFlag).join('');
 
+          // Call out anyone who'd just be bench depth on their new team, not an upgrade.
+          const benchOnlyNotes = [];
+          comboB.forEach(x=>{ if(!valueToTeam(x, starterFloorA).wouldStart) benchOnlyNotes.push(`${x.p.name} would be bench depth for ${nameA}, not a lineup upgrade`); });
+          comboA.forEach(x=>{ if(!valueToTeam(x, starterFloorB).wouldStart) benchOnlyNotes.push(`${x.p.name} would be bench depth for ${nameB}, not a lineup upgrade`); });
+          const benchOnlySentence = benchOnlyNotes.length ? ` ${benchOnlyNotes.join('; ')}.` : '';
+
           let riskSentence = '';
           if(bankruptcy.severeA.length){
             riskSentence += ` Heads up — this leaves ${nameA} with no rostered ${bankruptcy.severeA.join('/')} at all; only worth it because of how lopsided the value is in their favor.`;
@@ -3810,7 +3844,7 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           if(bankruptcy.moderateB.length){
             riskSentence += ` ${nameB} is left without an above-replacement ${bankruptcy.moderateB.join('/')} — thin, but streamable.`;
           }
-          const needSentence = riskSentence ? '' : (needFit >= 1
+          const needSentence = (riskSentence || benchOnlySentence) ? '' : (needFit >= 1
             ? ` Both sides are dealing from real depth to fill an actual need, not just matching numbers.`
             : (needFit > 0 ? ` There's some real need-filling here on top of the raw value match.` : ''));
 
@@ -3818,7 +3852,7 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
             names: [...aNames, ...bNames],
             aSends: aNames, bSends: bNames,
             score,
-            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (combined value ${totalA.toFixed(2)} vs ${totalB.toFixed(2)}).${needSentence}${riskSentence}${trendNotes}`
+            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (${nameA} gives up ${totalA.toFixed(2)} value for ${receivedA.toFixed(2)} in return; ${nameB} gives up ${totalB.toFixed(2)} for ${receivedB.toFixed(2)}).${needSentence}${riskSentence}${benchOnlySentence}${trendNotes}`
           });
         });
       });
