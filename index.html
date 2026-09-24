@@ -3353,10 +3353,56 @@ function computeStarterSet(roster){
   return starters;
 }
 
-function depthAdjustedValue(player, starterSet){
+function depthAdjustedValue(player, starterSet, replacementLevels){
   const raw = playerValue(player);
   if(raw === null) return null;
-  return starterSet.has(player) ? raw : raw * 0.5;
+  const pos = normalizePos(player.pos);
+  const repl = (replacementLevels && replacementLevels[pos] !== undefined) ? replacementLevels[pos] : 0;
+  const trueVal = raw - repl;
+  return starterSet.has(player) ? trueVal : trueVal * 0.5;
+}
+
+// Value-based scarcity: for each position, finds the PPG of the best player who
+// WOULDN'T be starting anywhere in the league right now (the "replacement level").
+// A player's real trade value is how far above that bar they sit — which is what
+// lets one truly elite QB (a scarce, single-slot position) outweigh two merely-good
+// WRs (a deep position with several flex slots to fill).
+function computeReplacementLevels(year){
+  const allByPos = {};
+  const startedCountByPos = {};
+
+  data.owners.forEach(o=>{
+    const roster = (data.rosters[year] && data.rosters[year][o.id]) || [];
+    const starterSet = computeStarterSet(roster);
+    roster.forEach(p=>{
+      const val = playerValue(p);
+      if(val === null) return;
+      const pos = normalizePos(p.pos);
+      if(!allByPos[pos]) allByPos[pos] = [];
+      allByPos[pos].push(val);
+      if(starterSet.has(p)){
+        startedCountByPos[pos] = (startedCountByPos[pos] || 0) + 1;
+      }
+    });
+  });
+
+  const replacementLevels = {};
+  Object.keys(allByPos).forEach(pos=>{
+    const sorted = allByPos[pos].slice().sort((a,b)=> b - a);
+    const slots = startedCountByPos[pos] || 0;
+    replacementLevels[pos] = sorted[slots] !== undefined ? sorted[slots] : (sorted[sorted.length - 1] || 0);
+  });
+  return replacementLevels;
+}
+
+// How many of the league's starting lineup slots a position could ever fill,
+// counting flex eligibility (e.g. RB/WR and WR/TE flexes both count toward WR's total).
+function maxStartersByPosition(){
+  const max = {};
+  ensureLineupSlots().forEach(slot=>{
+    slot.forEach(pos=>{ max[pos] = (max[pos] || 0) + 1; });
+  });
+  return max;
 }
 
 function teamPositionCounts(roster){
@@ -3380,13 +3426,78 @@ function positionalNeedNote(sentAway, received, myCounts){
   return notes.length ? notes.join('; ') + '.' : 'No major positional need either way based on current roster construction.';
 }
 
-function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
+// Every game a named player has a stat line for this season, in week order —
+// works across a team change mid-season since it scans every team's stats, not just one roster.
+function getPlayerGameHistory(year, playerName){
+  const key = statKey(playerName);
+  const history = [];
+  (data.schedule[year] || []).forEach(g=>{
+    Object.values(g.stats || {}).forEach(playerMap=>{
+      const entry = playerMap[key];
+      if(entry) history.push({ week: g.week, points: Number(entry.points) || 0 });
+    });
+  });
+  history.sort((a,b)=> a.week - b.week);
+  return history;
+}
+
+// Is this player hot right now (sell-high) or cold relative to their own season (buy-low)?
+function computeRecentForm(year, playerName, lastN){
+  const history = getPlayerGameHistory(year, playerName);
+  if(history.length < 2) return null;
+  const n = lastN || 3;
+  const seasonAvg = history.reduce((s,h)=> s+h.points, 0) / history.length;
+  const recentGames = history.slice(-n);
+  const recentAvg = recentGames.reduce((s,h)=> s+h.points, 0) / recentGames.length;
+  const diffPct = seasonAvg !== 0 ? (recentAvg - seasonAvg) / Math.abs(seasonAvg) : 0;
+  let trend = 'steady';
+  if(diffPct > 0.18) trend = 'up';
+  else if(diffPct < -0.18) trend = 'down';
+  return { seasonAvg, recentAvg, trend, games: history.length };
+}
+
+// Week-to-week volatility — a high number means boom/bust, a low number means steady/reliable.
+function computeVolatility(year, playerName){
+  const history = getPlayerGameHistory(year, playerName);
+  if(history.length < 2) return null;
+  const avg = history.reduce((s,h)=> s+h.points, 0) / history.length;
+  const variance = history.reduce((s,h)=> s + Math.pow(h.points - avg, 2), 0) / history.length;
+  return Math.sqrt(variance);
+}
+
+// Where does this team stand right now — comfortably in, fighting for a spot, or a longshot?
+function getTeamCompetitiveContext(ownerId, year){
+  if(data.owners.length < 8) return { status: 'unknown', rank: null };
+  const anyPlayed = (data.schedule[year] || []).some(isPlayed);
+  if(!anyPlayed) return { status: 'early', rank: null };
+  const standings = orderedStandings(year);
+  const idx = standings.findIndex(r=> r.owner.id === ownerId);
+  if(idx === -1) return { status: 'unknown', rank: null };
+  const rank = idx + 1;
+  let status;
+  if(rank <= 4) status = 'contender';
+  else if(rank <= 8) status = 'bubble-in';
+  else if(rank <= 10) status = 'bubble-out';
+  else status = 'longshot';
+  return { status, rank };
+}
+
+function competitiveContextNote(ctx, teamName){
+  if(ctx.status === 'contender') return `${teamName} is sitting comfortably in a playoff spot right now (#${ctx.rank}) — steady, reliable production probably matters more than chasing upside.`;
+  if(ctx.status === 'bubble-in') return `${teamName} is in a playoff spot but not out of the woods (#${ctx.rank}) — a real upgrade is worth paying for.`;
+  if(ctx.status === 'bubble-out') return `${teamName} is just outside the playoff line (#${ctx.rank}) — this is exactly the spot where a swing-for-the-fences move makes sense.`;
+  if(ctx.status === 'longshot') return `${teamName} is a longshot for the playoffs right now (#${ctx.rank}) — worth weighing whether to push for a win-now piece or bank value for the rest of the season.`;
+  return '';
+}
+
+function assessTradeLocally(nameA, nameB, aId, bId, rosterA, rosterB, sendA, sendB){
   const starterSetA = computeStarterSet(rosterA);
   const starterSetB = computeStarterSet(rosterB);
+  const replacementLevels = computeReplacementLevels(currentSeason);
   const rawA = sendA.map(playerValue);
   const rawB = sendB.map(playerValue);
-  const adjA = sendA.map(p=> depthAdjustedValue(p, starterSetA));
-  const adjB = sendB.map(p=> depthAdjustedValue(p, starterSetB));
+  const adjA = sendA.map(p=> depthAdjustedValue(p, starterSetA, replacementLevels));
+  const adjB = sendB.map(p=> depthAdjustedValue(p, starterSetB, replacementLevels));
   const knownA = adjA.filter(v=> v !== null);
   const knownB = adjB.filter(v=> v !== null);
   const missingA = adjA.length - knownA.length;
@@ -3395,7 +3506,7 @@ function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
   const sumB = knownB.reduce((s,v)=> s+v, 0);
   const rawSumA = rawA.filter(v=>v!==null).reduce((s,v)=>s+v,0);
   const rawSumB = rawB.filter(v=>v!==null).reduce((s,v)=>s+v,0);
-  const anyDiscounted = adjA.some((v,i)=> v !== null && v !== rawA[i]) || adjB.some((v,i)=> v !== null && v !== rawB[i]);
+  const anyDiscounted = sendA.some(p=> playerValue(p) !== null && !starterSetA.has(p)) || sendB.some(p=> playerValue(p) !== null && !starterSetB.has(p));
 
   let verdict, summary;
   if(knownA.length === 0 && knownB.length === 0){
@@ -3407,58 +3518,177 @@ function assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB){
     const pct = Math.abs(diff) / total;
     if(pct < 0.12){
       verdict = 'Fair trade';
-      summary = `Roughly even value once roster context is factored in — ${nameA} sends ~${sumA.toFixed(2)} adjusted PPG, ${nameB} sends ~${sumB.toFixed(2)} adjusted PPG.`;
+      summary = `Roughly even value once roster context and position scarcity are factored in — ${nameA} sends ~${sumA.toFixed(2)} value, ${nameB} sends ~${sumB.toFixed(2)} value.`;
     } else if(diff > 0){
       verdict = `Good for ${nameA}`;
-      summary = `${nameA} is taking on more real lineup value than they're giving up (~${sumB.toFixed(2)} adjusted PPG in vs ~${sumA.toFixed(2)} out).`;
+      summary = `${nameA} is taking on more real, scarcity-adjusted value than they're giving up (~${sumB.toFixed(2)} in vs ~${sumA.toFixed(2)} out).`;
     } else {
       verdict = `Good for ${nameB}`;
-      summary = `${nameB} is taking on more real lineup value than they're giving up (~${sumA.toFixed(2)} adjusted PPG in vs ~${sumB.toFixed(2)} out).`;
+      summary = `${nameB} is taking on more real, scarcity-adjusted value than they're giving up (~${sumA.toFixed(2)} in vs ~${sumB.toFixed(2)} out).`;
     }
     if(anyDiscounted){
-      summary += ` (Raw PPG was ${rawSumA.toFixed(2)} vs ${rawSumB.toFixed(2)} — adjusted down for players buried on the bench behind teammates at the same position.)`;
+      summary += ` (Raw PPG was ${rawSumA.toFixed(2)} vs ${rawSumB.toFixed(2)} — the difference reflects bench discounting and how replaceable each position is right now, not just points scored.)`;
     }
   }
 
   const countsA = teamPositionCounts(rosterA);
   const countsB = teamPositionCounts(rosterB);
 
+  function trendNote(players){
+    const notes = [];
+    players.forEach(p=>{
+      const form = computeRecentForm(currentSeason, p.name);
+      if(!form) return;
+      if(form.trend === 'up') notes.push(`${p.name} is trending up lately (${form.recentAvg.toFixed(2)} recent PPG vs ${form.seasonAvg.toFixed(2)} season) — this is close to sell-high timing.`);
+      else if(form.trend === 'down') notes.push(`${p.name} has cooled off recently (${form.recentAvg.toFixed(2)} recent PPG vs ${form.seasonAvg.toFixed(2)} season) — could be a buy-low if you believe in a bounce-back.`);
+    });
+    return notes;
+  }
+
+  const marketNotes = [...trendNote(sendA), ...trendNote(sendB)];
+  const contextNotes = [aId, bId].map((id, i)=>{
+    const ctx = getTeamCompetitiveContext(id, currentSeason);
+    return ctx.status === 'unknown' || ctx.status === 'early' ? null : competitiveContextNote(ctx, i === 0 ? nameA : nameB);
+  }).filter(Boolean);
+
   return {
     verdict, summary,
     forTeamA: (missingA ? `${missingA} of the player${missingA > 1 ? 's' : ''} ${nameA} is sending ${missingA > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendA, sendB, countsA),
-    forTeamB: (missingB ? `${missingB} of the player${missingB > 1 ? 's' : ''} ${nameB} is sending ${missingB > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendB, sendA, countsB)
+    forTeamB: (missingB ? `${missingB} of the player${missingB > 1 ? 's' : ''} ${nameB} is sending ${missingB > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendB, sendA, countsB),
+    marketNotes, contextNotes
   };
 }
 
 function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
-  const countsA = teamPositionCounts(rosterA);
-  const countsB = teamPositionCounts(rosterB);
-  const positions = [...new Set([...rosterA, ...rosterB].map(p=> normalizePos(p.pos)))];
+  const TRADE_SUGGEST_POSITIONS = ['QB', 'RB', 'WR', 'TE'];
   const starterSetA = computeStarterSet(rosterA);
   const starterSetB = computeStarterSet(rosterB);
+  const replacementLevels = computeReplacementLevels(currentSeason);
+  const maxStarters = maxStartersByPosition();
+  const countsA = teamPositionCounts(rosterA);
+  const countsB = teamPositionCounts(rosterB);
 
-  const aSurplus = positions.filter(pos=> (countsA[pos] || 0) - (countsB[pos] || 0) >= 2);
-  const bSurplus = positions.filter(pos=> (countsB[pos] || 0) - (countsA[pos] || 0) >= 2);
+  function isSurplus(counts, pos){ return (counts[pos] || 0) > (maxStarters[pos] || 1); }
+  function isNeed(counts, pos){ return (counts[pos] || 0) <= (maxStarters[pos] || 1); }
 
-  const suggestions = [];
-  aSurplus.forEach(posA=>{
-    bSurplus.forEach(posB=>{
-      if(posA === posB) return;
-      const aCandidates = rosterA.filter(p=> normalizePos(p.pos) === posA)
-        .map(p=>({ p, val: depthAdjustedValue(p, starterSetA) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
-      const bCandidates = rosterB.filter(p=> normalizePos(p.pos) === posB)
-        .map(p=>({ p, val: depthAdjustedValue(p, starterSetB) })).filter(x=> x.val !== null).sort((x,y)=> x.val - y.val);
-      if(aCandidates.length && bCandidates.length){
-        const aPick = aCandidates[0], bPick = bCandidates[0];
-        suggestions.push({
-          aSends: [aPick.p.name],
-          bSends: [bPick.p.name],
-          rationale: `${nameA} has surplus at ${posA} (${countsA[posA]} rostered) while ${nameB} is thin there; ${nameB} has surplus at ${posB} while ${nameA} is thin there. Adjusted values are close (${aPick.val.toFixed(2)} vs ${bPick.val.toFixed(2)} PPG).`
-        });
+  function trendFlag(name){
+    const form = computeRecentForm(currentSeason, name);
+    if(!form) return '';
+    if(form.trend === 'up') return ` (${name} is trending up lately — sell-high timing)`;
+    if(form.trend === 'down') return ` (${name} has cooled off recently — possible buy-low)`;
+    return '';
+  }
+
+  // Top-value tradeable pool per side, restricted to a manageable size so combination
+  // search (for the bigger trade shapes) stays fast.
+  function buildPool(roster, starterSet){
+    return roster
+      .filter(p=> TRADE_SUGGEST_POSITIONS.includes(normalizePos(p.pos)))
+      .map(p=>({ p, pos: normalizePos(p.pos), val: depthAdjustedValue(p, starterSet, replacementLevels) }))
+      .filter(x=> x.val !== null)
+      .sort((a,b)=> b.val - a.val)
+      .slice(0, 8);
+  }
+
+  function combinationsOf(arr, k){
+    const out = [];
+    (function helper(start, combo){
+      if(combo.length === k){ out.push(combo.slice()); return; }
+      for(let i = start; i < arr.length; i++){
+        combo.push(arr[i]);
+        helper(i + 1, combo);
+        combo.pop();
       }
-    });
-  });
-  return suggestions.slice(0, 3);
+    })(0, []);
+    return out;
+  }
+
+  // 1 = trades of 1-2 players per side (the everyday stuff), 2 = 3-player-max shapes
+  // (uncommon, needs a tighter fit), 3 = anything touching 4 or 5 players on a side
+  // (a real blockbuster — needs both fairness AND a strong need-fit story).
+  function shapeTier(n, m){
+    if(n <= 2 && m <= 2) return 'common';
+    if(n <= 3 && m <= 3) return 'rare';
+    return 'veryrare';
+  }
+  const TIER_VALUE_THRESHOLD = { common: 0.30, rare: 0.16, veryrare: 0.09 };
+  const TIER_MIN_NEEDFIT = { common: 0, rare: 0.4, veryrare: 1.1 };
+
+  function needFitScore(comboA, comboB){
+    let score = 0;
+    comboA.forEach(x=>{ if(isSurplus(countsA, x.pos)) score++; if(isNeed(countsB, x.pos)) score++; });
+    comboB.forEach(x=>{ if(isSurplus(countsB, x.pos)) score++; if(isNeed(countsA, x.pos)) score++; });
+    return score / (comboA.length + comboB.length);
+  }
+
+  function describeShape(n, m){
+    if(n === 1 && m === 1) return 'a straight-up 1-for-1';
+    if(n !== m) return `a ${n}-for-${m} consolidation`;
+    return `a balanced ${n}-for-${m}`;
+  }
+
+  const poolA = buildPool(rosterA, starterSetA);
+  const poolB = buildPool(rosterB, starterSetB);
+
+  // Pre-build combinations of each size once per side, reused across every shape.
+  const combosA = {}, combosB = {};
+  for(let k = 1; k <= 5; k++){
+    combosA[k] = combinationsOf(poolA, k);
+    combosB[k] = combinationsOf(poolB, k);
+  }
+
+  const candidates = [];
+  for(let n = 1; n <= 5; n++){
+    for(let m = 1; m <= 5; m++){
+      const tier = shapeTier(n, m);
+      const valueThreshold = TIER_VALUE_THRESHOLD[tier];
+      const minNeedFit = TIER_MIN_NEEDFIT[tier];
+      const listA = combosA[n], listB = combosB[m];
+      if(!listA.length || !listB.length) continue;
+
+      listA.forEach(comboA=>{
+        listB.forEach(comboB=>{
+          const totalA = comboA.reduce((s,x)=> s + x.val, 0);
+          const totalB = comboB.reduce((s,x)=> s + x.val, 0);
+          const combinedMag = Math.abs(totalA) + Math.abs(totalB) || 1;
+          const diffPct = Math.abs(totalA - totalB) / combinedMag;
+          if(diffPct > valueThreshold) return;
+
+          const needFit = needFitScore(comboA, comboB);
+          if(needFit < minNeedFit) return;
+
+          const complexityPenalty = (n + m) * 0.6;
+          const score = needFit * 3 - diffPct * 10 - complexityPenalty;
+
+          const aNames = comboA.map(x=> x.p.name);
+          const bNames = comboB.map(x=> x.p.name);
+          const trendNotes = [...aNames, ...bNames].map(trendFlag).join('');
+          const needSentence = needFit >= 1
+            ? ` Both sides are dealing from real depth to fill an actual need, not just matching numbers.`
+            : (needFit > 0 ? ` There's some real need-filling here on top of the raw value match.` : '');
+
+          candidates.push({
+            names: [...aNames, ...bNames],
+            aSends: aNames, bSends: bNames,
+            score,
+            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (combined value ${totalA.toFixed(2)} vs ${totalB.toFixed(2)}).${needSentence}${trendNotes}`
+          });
+        });
+      });
+    }
+  }
+
+  candidates.sort((x,y)=> y.score - x.score);
+
+  const results = [];
+  const used = new Set();
+  for(const c of candidates){
+    if(c.names.some(n=> used.has(n))) continue;
+    results.push(c);
+    c.names.forEach(n=> used.add(n));
+    if(results.length >= 3) break;
+  }
+  return results;
 }
 
 document.getElementById('tradeTeamA').addEventListener('change', ()=>{
@@ -3485,15 +3715,17 @@ document.getElementById('assessTradeBtn').addEventListener('click', ()=>{
   if(sendA.length === 0 && sendB.length === 0){ toast('Select at least one player on a side'); return; }
 
   const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
-  const parsed = assessTradeLocally(nameA, nameB, rosterA, rosterB, sendA, sendB);
+  const parsed = assessTradeLocally(nameA, nameB, aId, bId, rosterA, rosterB, sendA, sendB);
+  const extraNotes = [...(parsed.contextNotes||[]), ...(parsed.marketNotes||[])];
   document.getElementById('tradeResult').innerHTML = `
     <div class="verdict-card">
       <span class="verdict-badge">${parsed.verdict}</span>
       <p>${parsed.summary}</p>
       <p><strong>${nameA}:</strong> ${parsed.forTeamA}</p>
       <p><strong>${nameB}:</strong> ${parsed.forTeamB}</p>
+      ${extraNotes.length ? `<p style="margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);">${extraNotes.join(' ')}</p>` : ''}
     </div>
-    <p class="hint">Calculated from season points-per-game and roster composition — not a nuanced read, just the numbers as logged so far.</p>
+    <p class="hint">Calculated from season points-per-game, position scarcity, and roster composition — not a nuanced read, just the numbers as logged so far.</p>
   `;
 });
 
