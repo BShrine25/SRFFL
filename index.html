@@ -3909,7 +3909,7 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           candidates.push({
             names: [...aNamesRaw, ...bNamesRaw],
             aSends: aNamesRaw, bSends: bNamesRaw,
-            score,
+            score, tier,
             rationale: `${describeShape(n, m)}: ${nameA} sends ${aNamesRaw.join(', ')} for ${nameB}'s ${bNamesRaw.join(', ')}. `
               + `${nameA}'s starting lineup ${deltaA >= 0 ? 'gains' : 'loses'} ${Math.abs(deltaA).toFixed(2)} pts/week; `
               + `${nameB}'s ${deltaB >= 0 ? 'gains' : 'loses'} ${Math.abs(deltaB).toFixed(2)} pts/week.`
@@ -3922,24 +3922,56 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
 
   candidates.sort((x,y)=> y.score - x.score);
 
-  const results = [];
+  // Reserve spots for the rarer shapes FIRST, before the far more abundant common
+  // trades get a chance to claim their players — otherwise a legitimate 3-for-2 or
+  // 4-for-2 could lose out on a shared player to a merely-good 1-for-1 that happened
+  // to rank higher globally. Each list is internally deduped; the three lists are also
+  // mutually deduped against each other via the shared `used` set, so any combination
+  // of picks across them is always safe to show together on the same page.
   const used = new Set();
-  for(const c of candidates){
-    if(c.names.some(n=> used.has(n))) continue;
-    results.push(c);
-    c.names.forEach(n=> used.add(n));
-    if(results.length >= 3) break;
+  function fillTier(tierName, cap){
+    const list = [];
+    for(const c of candidates){
+      if(c.tier !== tierName || list.length >= cap) continue;
+      if(c.names.some(n=> used.has(n))) continue;
+      list.push(c);
+      c.names.forEach(n=> used.add(n));
+    }
+    return list;
   }
-  return results;
+  const veryRareList = fillTier('veryrare', 6);
+  const rareList = fillTier('rare', 6);
+  const commonList = fillTier('common', 12);
+
+  // Interleave: mostly common (the everyday stuff), with a rare or very-rare trade
+  // dropped in periodically whenever one actually exists — never forced, never faked.
+  const sequence = [];
+  let ci = 0, ri = 0, vi = 0, round = 0;
+  while(ci < commonList.length || ri < rareList.length || vi < veryRareList.length){
+    for(let k = 0; k < 2 && ci < commonList.length; k++) sequence.push(commonList[ci++]);
+    if(round % 2 === 0 && ri < rareList.length) sequence.push(rareList[ri++]);
+    else if(vi < veryRareList.length) sequence.push(veryRareList[vi++]);
+    else if(ri < rareList.length) sequence.push(rareList[ri++]);
+    else if(ci < commonList.length) sequence.push(commonList[ci++]);
+    round++;
+    if(ci >= commonList.length && ri >= rareList.length && vi >= veryRareList.length) break;
+  }
+  while(ci < commonList.length) sequence.push(commonList[ci++]);
+  while(ri < rareList.length) sequence.push(rareList[ri++]);
+  while(vi < veryRareList.length) sequence.push(veryRareList[vi++]);
+
+  return sequence;
 }
 
 document.getElementById('tradeTeamA').addEventListener('change', ()=>{
   tradeSelections = { A:new Set(), B:new Set() };
+  tradeCycleState = { sequence: [], pageIndex: -1, aId: null, bId: null };
   document.getElementById('tradeResult').innerHTML = '';
   renderTradeBuilder();
 });
 document.getElementById('tradeTeamB').addEventListener('change', ()=>{
   tradeSelections = { A:new Set(), B:new Set() };
+  tradeCycleState = { sequence: [], pageIndex: -1, aId: null, bId: null };
   document.getElementById('tradeResult').innerHTML = '';
   renderTradeBuilder();
 });
@@ -3971,6 +4003,8 @@ document.getElementById('assessTradeBtn').addEventListener('click', ()=>{
   `;
 });
 
+let tradeCycleState = { sequence: [], pageIndex: -1, aId: null, bId: null };
+
 document.getElementById('suggestTradesBtn').addEventListener('click', ()=>{
   const aId = document.getElementById('tradeTeamA').value;
   const bId = document.getElementById('tradeTeamB').value;
@@ -3982,19 +4016,33 @@ document.getElementById('suggestTradesBtn').addEventListener('click', ()=>{
   if(rosterA.length === 0 || rosterB.length === 0){ toast('Both rosters need players entered first'); return; }
 
   const nameA = teamA.team || teamA.name, nameB = teamB.team || teamB.name;
-  const trades = suggestTradesLocally(nameA, nameB, rosterA, rosterB);
   const resultBox = document.getElementById('tradeResult');
-  if(trades.length === 0){
+
+  const sameTeams = tradeCycleState.aId === aId && tradeCycleState.bId === bId;
+  if(!sameTeams){
+    const sequence = suggestTradesLocally(nameA, nameB, rosterA, rosterB);
+    tradeCycleState = { sequence, pageIndex: 0, aId, bId };
+  } else if(tradeCycleState.sequence.length > 0){
+    const totalPages = Math.max(1, Math.ceil(tradeCycleState.sequence.length / 3));
+    tradeCycleState.pageIndex = (tradeCycleState.pageIndex + 1) % totalPages;
+  }
+
+  const sequence = tradeCycleState.sequence;
+  if(sequence.length === 0){
     resultBox.innerHTML = `<p class="hint">No clear surplus-vs-need fit found between these two rosters right now — that's not necessarily bad, it just means neither side has an obvious positional imbalance to trade around.</p>`;
     return;
   }
-  resultBox.innerHTML = trades.map(t=>`
+  const totalPages = Math.max(1, Math.ceil(sequence.length / 3));
+  const start = tradeCycleState.pageIndex * 3;
+  const page = sequence.slice(start, start + 3);
+
+  resultBox.innerHTML = page.map(t=>`
     <div class="suggestion-card">
       <div class="suggestion-side"><strong>${nameA} sends:</strong> ${t.aSends.join(', ')}</div>
       <div class="suggestion-side"><strong>${nameB} sends:</strong> ${t.bSends.join(', ')}</div>
       <p class="hint" style="margin:.4rem 0 0;">${t.rationale}</p>
     </div>
-  `).join('') + `<p class="hint">Based on roster composition and PPG only — sanity check before proposing for real.</p>`;
+  `).join('') + `<p class="hint">Based on roster composition and PPG only — sanity check before proposing for real.${totalPages > 1 ? ` (Set ${tradeCycleState.pageIndex + 1} of ${totalPages} — click again for more)` : ''}</p>`;
 });
 
 /* ---------- Nav & wiring ---------- */
