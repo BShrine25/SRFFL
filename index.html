@@ -3405,6 +3405,37 @@ function maxStartersByPosition(){
   return max;
 }
 
+// Slots where this position is the ONLY thing eligible there (not shared with a flex) —
+// the number of these a team could ever be forced to fill regardless of flex usage.
+function dedicatedSlotsByPosition(){
+  const dedicated = {};
+  ensureLineupSlots().forEach(slot=>{
+    if(slot.length === 1) dedicated[slot[0]] = (dedicated[slot[0]] || 0) + 1;
+  });
+  return dedicated;
+}
+
+// How many players a team has at a position who are actually worth starting (above
+// replacement level) — a team can roster three tight ends and still have a real TE
+// need if none of them are any good, and rostering exactly one QB is completely normal,
+// not a hole, as long as that one QB is legitimately startable.
+function countAboveReplacement(roster, starterSet, pos, replacementLevels){
+  return roster.filter(p=> normalizePos(p.pos) === pos)
+    .map(p=> depthAdjustedValue(p, starterSet, replacementLevels))
+    .filter(v=> v !== null && v > 0).length;
+}
+
+// "Need" is a low bar (dedicated slots, or at least 1) — don't even have a single
+// legitimately startable player there. "Surplus" is a high bar (more quality players
+// than every eligible slot, flex included, could ever use) — real, spare depth.
+function isNeed(roster, starterSet, pos, replacementLevels, dedicatedSlots){
+  const threshold = Math.max(dedicatedSlots[pos] || 0, 1);
+  return countAboveReplacement(roster, starterSet, pos, replacementLevels) < threshold;
+}
+function isSurplus(roster, starterSet, pos, replacementLevels, maxStarters){
+  return countAboveReplacement(roster, starterSet, pos, replacementLevels) > (maxStarters[pos] || 1);
+}
+
 function teamPositionCounts(roster){
   const counts = {};
   roster.forEach(p=>{
@@ -3414,14 +3445,14 @@ function teamPositionCounts(roster){
   return counts;
 }
 
-function positionalNeedNote(sentAway, received, myCounts){
+function positionalNeedNote(sentAway, received, myRoster, myStarterSet, replacementLevels, maxStarters, dedicatedSlots){
   const notes = [];
   const posOf = p=> normalizePos(p.pos);
   [...new Set(received.map(posOf))].forEach(pos=>{
-    if((myCounts[pos] || 0) <= 1) notes.push(`adds depth at ${pos}, a thin spot on this roster`);
+    if(isNeed(myRoster, myStarterSet, pos, replacementLevels, dedicatedSlots)) notes.push(`adds real help at ${pos}, a genuine hole on this roster`);
   });
   [...new Set(sentAway.map(posOf))].forEach(pos=>{
-    if((myCounts[pos] || 0) >= 4) notes.push(`gives up ${pos} depth, which this roster had plenty of`);
+    if(isSurplus(myRoster, myStarterSet, pos, replacementLevels, maxStarters)) notes.push(`gives up ${pos} depth this roster had to spare`);
   });
   return notes.length ? notes.join('; ') + '.' : 'No major positional need either way based on current roster construction.';
 }
@@ -3531,8 +3562,8 @@ function assessTradeLocally(nameA, nameB, aId, bId, rosterA, rosterB, sendA, sen
     }
   }
 
-  const countsA = teamPositionCounts(rosterA);
-  const countsB = teamPositionCounts(rosterB);
+  const maxStarters = maxStartersByPosition();
+  const dedicatedSlots = dedicatedSlotsByPosition();
 
   function trendNote(players){
     const notes = [];
@@ -3553,8 +3584,8 @@ function assessTradeLocally(nameA, nameB, aId, bId, rosterA, rosterB, sendA, sen
 
   return {
     verdict, summary,
-    forTeamA: (missingA ? `${missingA} of the player${missingA > 1 ? 's' : ''} ${nameA} is sending ${missingA > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendA, sendB, countsA),
-    forTeamB: (missingB ? `${missingB} of the player${missingB > 1 ? 's' : ''} ${nameB} is sending ${missingB > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendB, sendA, countsB),
+    forTeamA: (missingA ? `${missingA} of the player${missingA > 1 ? 's' : ''} ${nameA} is sending ${missingA > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendA, sendB, rosterA, starterSetA, replacementLevels, maxStarters, dedicatedSlots),
+    forTeamB: (missingB ? `${missingB} of the player${missingB > 1 ? 's' : ''} ${nameB} is sending ${missingB > 1 ? 'have' : 'has'} no logged stats yet, so this is a partial read. ` : '') + positionalNeedNote(sendB, sendA, rosterB, starterSetB, replacementLevels, maxStarters, dedicatedSlots),
     marketNotes, contextNotes
   };
 }
@@ -3565,11 +3596,9 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   const starterSetB = computeStarterSet(rosterB);
   const replacementLevels = computeReplacementLevels(currentSeason);
   const maxStarters = maxStartersByPosition();
-  const countsA = teamPositionCounts(rosterA);
-  const countsB = teamPositionCounts(rosterB);
-
-  function isSurplus(counts, pos){ return (counts[pos] || 0) > (maxStarters[pos] || 1); }
-  function isNeed(counts, pos){ return (counts[pos] || 0) <= (maxStarters[pos] || 1); }
+  const dedicatedSlots = dedicatedSlotsByPosition();
+  const teamSurplus = (roster, starterSet, pos)=> isSurplus(roster, starterSet, pos, replacementLevels, maxStarters);
+  const teamNeed = (roster, starterSet, pos)=> isNeed(roster, starterSet, pos, replacementLevels, dedicatedSlots);
 
   function trendFlag(name){
     const form = computeRecentForm(currentSeason, name);
@@ -3616,8 +3645,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
 
   function needFitScore(comboA, comboB){
     let score = 0;
-    comboA.forEach(x=>{ if(isSurplus(countsA, x.pos)) score++; if(isNeed(countsB, x.pos)) score++; });
-    comboB.forEach(x=>{ if(isSurplus(countsB, x.pos)) score++; if(isNeed(countsA, x.pos)) score++; });
+    comboA.forEach(x=>{ if(teamSurplus(rosterA, starterSetA, x.pos)) score++; if(teamNeed(rosterB, starterSetB, x.pos)) score++; });
+    comboB.forEach(x=>{ if(teamSurplus(rosterB, starterSetB, x.pos)) score++; if(teamNeed(rosterA, starterSetA, x.pos)) score++; });
     return score / (comboA.length + comboB.length);
   }
 
