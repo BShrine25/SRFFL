@@ -3608,11 +3608,24 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   // Surplus/need only depends on (team, position) — compute it once per position up
   // front instead of re-scanning each roster on every one of the ~47,000 combo checks.
   const surplusA = {}, needA = {}, surplusB = {}, needB = {};
+  // Raw (non bench-discounted) roster counts, used to simulate what each roster looks
+  // like AFTER a trade — depth-adjusted value already reflects the CURRENT lineup, but
+  // "how many warm bodies do I have left at this position" needs the real numbers.
+  const totalCountA = {}, totalCountB = {}, aboveReplCountA = {}, aboveReplCountB = {};
+  function rawAboveReplCount(roster, pos){
+    return roster.filter(p=> normalizePos(p.pos) === pos)
+      .map(p=> playerValue(p))
+      .filter(v=> v !== null && (v - (replacementLevels[pos] || 0)) > 0).length;
+  }
   TRADE_SUGGEST_POSITIONS.forEach(pos=>{
     surplusA[pos] = isSurplus(rosterA, starterSetA, pos, replacementLevels, maxStarters);
     needA[pos] = isNeed(rosterA, starterSetA, pos, replacementLevels, dedicatedSlots);
     surplusB[pos] = isSurplus(rosterB, starterSetB, pos, replacementLevels, maxStarters);
     needB[pos] = isNeed(rosterB, starterSetB, pos, replacementLevels, dedicatedSlots);
+    totalCountA[pos] = rosterA.filter(p=> normalizePos(p.pos) === pos).length;
+    totalCountB[pos] = rosterB.filter(p=> normalizePos(p.pos) === pos).length;
+    aboveReplCountA[pos] = rawAboveReplCount(rosterA, pos);
+    aboveReplCountB[pos] = rawAboveReplCount(rosterB, pos);
   });
 
   const trendCache = {};
@@ -3630,7 +3643,15 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   function buildPool(roster, starterSet){
     return roster
       .filter(p=> TRADE_SUGGEST_POSITIONS.includes(normalizePos(p.pos)))
-      .map(p=>({ p, pos: normalizePos(p.pos), val: depthAdjustedValue(p, starterSet, replacementLevels) }))
+      .map(p=>{
+        const pos = normalizePos(p.pos);
+        const raw = playerValue(p);
+        return {
+          p, pos,
+          val: depthAdjustedValue(p, starterSet, replacementLevels),
+          aboveReplRaw: raw !== null && (raw - (replacementLevels[pos] || 0)) > 0
+        };
+      })
       .filter(x=> x.val !== null)
       .sort((a,b)=> b.val - a.val)
       .slice(0, 8);
@@ -3667,6 +3688,43 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     return score / (comboA.length + comboB.length);
   }
 
+  function countByPos(combo, aboveOnly){
+    const out = {};
+    combo.forEach(x=>{
+      if(aboveOnly && !x.aboveReplRaw) return;
+      out[x.pos] = (out[x.pos] || 0) + 1;
+    });
+    return out;
+  }
+
+  // Does this trade leave either team with an actual, self-inflicted hole at a position
+  // they were fine at before? "Severe" = literally nobody left at that position at all.
+  // "Moderate" = still have warm bodies, just nobody above replacement level (streamable).
+  function bankruptcyCheck(comboA, comboB){
+    const leavingA = countByPos(comboA, false), arrivingA = countByPos(comboB, false);
+    const leavingAAbove = countByPos(comboA, true), arrivingAAbove = countByPos(comboB, true);
+    const leavingB = countByPos(comboB, false), arrivingB = countByPos(comboA, false);
+    const leavingBAbove = countByPos(comboB, true), arrivingBAbove = countByPos(comboA, true);
+
+    let severeA = [], moderateA = [], severeB = [], moderateB = [];
+    const posTouched = new Set([...comboA.map(x=>x.pos), ...comboB.map(x=>x.pos)]);
+    posTouched.forEach(pos=>{
+      const beforeAboveA = aboveReplCountA[pos] || 0;
+      const afterAboveA = beforeAboveA - (leavingAAbove[pos]||0) + (arrivingAAbove[pos]||0);
+      if(beforeAboveA > 0 && afterAboveA <= 0){
+        const afterTotalA = (totalCountA[pos]||0) - (leavingA[pos]||0) + (arrivingA[pos]||0);
+        (afterTotalA <= 0 ? severeA : moderateA).push(pos);
+      }
+      const beforeAboveB = aboveReplCountB[pos] || 0;
+      const afterAboveB = beforeAboveB - (leavingBAbove[pos]||0) + (arrivingBAbove[pos]||0);
+      if(beforeAboveB > 0 && afterAboveB <= 0){
+        const afterTotalB = (totalCountB[pos]||0) - (leavingB[pos]||0) + (arrivingB[pos]||0);
+        (afterTotalB <= 0 ? severeB : moderateB).push(pos);
+      }
+    });
+    return { severeA, moderateA, severeB, moderateB };
+  }
+
   function describeShape(n, m){
     if(n === 1 && m === 1) return 'a straight-up 1-for-1';
     if(n !== m) return `a ${n}-for-${m} consolidation`;
@@ -3676,7 +3734,6 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   const poolA = buildPool(rosterA, starterSetA);
   const poolB = buildPool(rosterB, starterSetB);
 
-  // Pre-build combinations of each size once per side, reused across every shape.
   const combosA = {}, combosB = {};
   for(let k = 1; k <= 5; k++){
     combosA[k] = combinationsOf(poolA, k);
@@ -3698,26 +3755,70 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
           const totalB = comboB.reduce((s,x)=> s + x.val, 0);
           const combinedMag = Math.abs(totalA) + Math.abs(totalB) || 1;
           const diffPct = Math.abs(totalA - totalB) / combinedMag;
-          if(diffPct > valueThreshold) return;
+
+          // Cheap pre-filter first: reject outright unless this is either a normal fair
+          // trade, or lopsided enough in someone's favor that it could plausibly justify
+          // gutting a position (checked properly just below). Skips the expensive
+          // bankruptcy scan for the vast majority of combos that have no shot either way.
+          const passesNormalFairness = diffPct <= valueThreshold;
+          if(!passesNormalFairness){
+            const edgeForA = (totalB - totalA) / (totalA || 1);
+            const edgeForB = (totalA - totalB) / (totalB || 1);
+            if(edgeForA < 0.35 && edgeForB < 0.35) return;
+          }
+
+          const bankruptcy = bankruptcyCheck(comboA, comboB);
+          const hasSevere = bankruptcy.severeA.length || bankruptcy.severeB.length;
+
+          // A "fair" value trade isn't enough justification to gut a position down to
+          // nothing — that only makes sense when the side taking the risk is clearly
+          // winning the trade on value, the way giving up your only RB and WR for a
+          // truly elite QB might be. Require a real value edge, not just closeness.
+          if(hasSevere){
+            const aRisking = bankruptcy.severeA.length > 0;
+            const bRisking = bankruptcy.severeB.length > 0;
+            const edgeForA = (totalB - totalA) / (totalA || 1);
+            const edgeForB = (totalA - totalB) / (totalB || 1);
+            if(aRisking && edgeForA < 0.35) return;
+            if(bRisking && edgeForB < 0.35) return;
+          } else if(!passesNormalFairness){
+            return;
+          }
 
           const needFit = needFitScore(comboA, comboB);
-          if(needFit < minNeedFit) return;
+          if(!hasSevere && needFit < minNeedFit) return;
 
           const complexityPenalty = (n + m) * 0.6;
-          const score = needFit * 3 - diffPct * 10 - complexityPenalty;
+          const bankruptcyPenalty = (bankruptcy.severeA.length + bankruptcy.severeB.length) * 5
+            + (bankruptcy.moderateA.length + bankruptcy.moderateB.length) * 2;
+          const score = needFit * 3 - diffPct * 10 - complexityPenalty - bankruptcyPenalty;
 
           const aNames = comboA.map(x=> x.p.name);
           const bNames = comboB.map(x=> x.p.name);
           const trendNotes = [...aNames, ...bNames].map(trendFlag).join('');
-          const needSentence = needFit >= 1
+
+          let riskSentence = '';
+          if(bankruptcy.severeA.length){
+            riskSentence += ` Heads up — this leaves ${nameA} with no rostered ${bankruptcy.severeA.join('/')} at all; only worth it because of how lopsided the value is in their favor.`;
+          }
+          if(bankruptcy.severeB.length){
+            riskSentence += ` Heads up — this leaves ${nameB} with no rostered ${bankruptcy.severeB.join('/')} at all; only worth it because of how lopsided the value is in their favor.`;
+          }
+          if(bankruptcy.moderateA.length){
+            riskSentence += ` ${nameA} is left without an above-replacement ${bankruptcy.moderateA.join('/')} — thin, but streamable.`;
+          }
+          if(bankruptcy.moderateB.length){
+            riskSentence += ` ${nameB} is left without an above-replacement ${bankruptcy.moderateB.join('/')} — thin, but streamable.`;
+          }
+          const needSentence = riskSentence ? '' : (needFit >= 1
             ? ` Both sides are dealing from real depth to fill an actual need, not just matching numbers.`
-            : (needFit > 0 ? ` There's some real need-filling here on top of the raw value match.` : '');
+            : (needFit > 0 ? ` There's some real need-filling here on top of the raw value match.` : ''));
 
           candidates.push({
             names: [...aNames, ...bNames],
             aSends: aNames, bSends: bNames,
             score,
-            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (combined value ${totalA.toFixed(2)} vs ${totalB.toFixed(2)}).${needSentence}${trendNotes}`
+            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (combined value ${totalA.toFixed(2)} vs ${totalB.toFixed(2)}).${needSentence}${riskSentence}${trendNotes}`
           });
         });
       });
