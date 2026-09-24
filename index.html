@@ -678,9 +678,11 @@ async function loadData(){
     else toast('Could not load league data — check your connection.');
   }
   applyDataDefaults();
+  invalidateSeasonStatsCache();
 }
 
 async function saveData(){
+  invalidateSeasonStatsCache();
   if(!sb){ toast('Supabase isn\'t configured yet.'); return; }
   const payloadKB = Math.round(new Blob([JSON.stringify(data)]).size / 1024);
   if(payloadKB > 800){
@@ -2155,7 +2157,11 @@ document.getElementById('addTxnBtn').addEventListener('click', ()=>{
   renderAddTxnForm();
 });
 
+let _seasonStatsCache = {};
+function invalidateSeasonStatsCache(){ _seasonStatsCache = {}; }
+
 function computeSeasonStats(year){
+  if(_seasonStatsCache[year]) return _seasonStatsCache[year];
   const result = {};
   const games = data.schedule[year] || [];
   games.forEach(g=>{
@@ -2190,6 +2196,7 @@ function computeSeasonStats(year){
       acc.games += Number(b.gp) || 0;
     });
   });
+  _seasonStatsCache[year] = result;
   return result;
 }
 
@@ -3597,11 +3604,21 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   const replacementLevels = computeReplacementLevels(currentSeason);
   const maxStarters = maxStartersByPosition();
   const dedicatedSlots = dedicatedSlotsByPosition();
-  const teamSurplus = (roster, starterSet, pos)=> isSurplus(roster, starterSet, pos, replacementLevels, maxStarters);
-  const teamNeed = (roster, starterSet, pos)=> isNeed(roster, starterSet, pos, replacementLevels, dedicatedSlots);
 
+  // Surplus/need only depends on (team, position) — compute it once per position up
+  // front instead of re-scanning each roster on every one of the ~47,000 combo checks.
+  const surplusA = {}, needA = {}, surplusB = {}, needB = {};
+  TRADE_SUGGEST_POSITIONS.forEach(pos=>{
+    surplusA[pos] = isSurplus(rosterA, starterSetA, pos, replacementLevels, maxStarters);
+    needA[pos] = isNeed(rosterA, starterSetA, pos, replacementLevels, dedicatedSlots);
+    surplusB[pos] = isSurplus(rosterB, starterSetB, pos, replacementLevels, maxStarters);
+    needB[pos] = isNeed(rosterB, starterSetB, pos, replacementLevels, dedicatedSlots);
+  });
+
+  const trendCache = {};
   function trendFlag(name){
-    const form = computeRecentForm(currentSeason, name);
+    if(!(name in trendCache)) trendCache[name] = computeRecentForm(currentSeason, name);
+    const form = trendCache[name];
     if(!form) return '';
     if(form.trend === 'up') return ` (${name} is trending up lately — sell-high timing)`;
     if(form.trend === 'down') return ` (${name} has cooled off recently — possible buy-low)`;
@@ -3645,8 +3662,8 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
 
   function needFitScore(comboA, comboB){
     let score = 0;
-    comboA.forEach(x=>{ if(teamSurplus(rosterA, starterSetA, x.pos)) score++; if(teamNeed(rosterB, starterSetB, x.pos)) score++; });
-    comboB.forEach(x=>{ if(teamSurplus(rosterB, starterSetB, x.pos)) score++; if(teamNeed(rosterA, starterSetA, x.pos)) score++; });
+    comboA.forEach(x=>{ if(surplusA[x.pos]) score++; if(needB[x.pos]) score++; });
+    comboB.forEach(x=>{ if(surplusB[x.pos]) score++; if(needA[x.pos]) score++; });
     return score / (comboA.length + comboB.length);
   }
 
