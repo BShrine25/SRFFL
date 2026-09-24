@@ -134,6 +134,9 @@
   .card table td, .card table th{ padding:.45rem .7rem; }
   .num{ text-align:right; font-variant-numeric:tabular-nums; }
   #statsTable .num{ text-align:center; }
+  .stats-team-col{ width:34px; padding-left:.3rem; padding-right:.2rem; }
+  #statsTable .te-row{ font-weight:700; }
+  .stats-subsection-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:2px solid var(--line); border-bottom:2px solid var(--line); }
   #standingsSeasonTable .num{ text-align:center; }
   .team-cell{ display:flex; align-items:center; gap:.4rem; }
   @media (max-width:700px){ .team-cell-name{ display:none; } }
@@ -892,7 +895,8 @@ function renderRosters(){
   const grid = document.createElement('div');
   grid.className = 'roster-grid';
 
-  data.owners.forEach((owner, idx)=>{
+  const sortedOwners = [...data.owners].sort((a,b)=> (a.team || a.name || '').localeCompare(b.team || b.name || ''));
+  sortedOwners.forEach((owner, idx)=>{
     const card = document.createElement('div');
     card.className = 'team-card';
     card.style.setProperty('--card-color', colorFor(idx));
@@ -912,7 +916,17 @@ function renderRosters(){
     const table = document.createElement('table');
     const tbody = document.createElement('tbody');
     const players = data.rosters[currentSeason][owner.id] || [];
-    players.forEach((p, pi)=>{
+    const POS_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF', 'K'];
+    const displayOrder = players.map((p, pi)=> ({ p, pi }));
+    displayOrder.sort((a, b)=>{
+      const oa = POS_ORDER.indexOf(normalizePos(a.p.pos));
+      const ob = POS_ORDER.indexOf(normalizePos(b.p.pos));
+      const ra = oa === -1 ? POS_ORDER.length : oa;
+      const rb = ob === -1 ? POS_ORDER.length : ob;
+      if(ra !== rb) return ra - rb;
+      return (a.p.name || '').localeCompare(b.p.name || '');
+    });
+    displayOrder.forEach(({ p, pi })=>{
       const tr = document.createElement('tr');
       const pts = seasonStats[statKey(p.name)] ? seasonStats[statKey(p.name)].points.toFixed(2) : '—';
       tr.innerHTML = `
@@ -1976,11 +1990,11 @@ function computeFantasyPoints(normPos, raw){
 }
 
 const STAT_CATEGORIES = {
-  passing:   { label:'Passing',   positions:['QB'],           cols:[{k:'py',l:'YDS'},{k:'ptd',l:'TD'},{k:'int',l:'INT'}] },
-  rushing:   { label:'Rushing',   positions:['QB','RB'],       cols:[{k:'ry',l:'YDS'},{k:'rtd',l:'TD'}] },
-  receiving: { label:'Receiving', positions:['RB','WR','TE'],  cols:[{k:'rec',l:'REC'},{k:'rey',l:'YDS'},{k:'retd',l:'TD'}] },
-  defense:   { label:'Defense',   positions:['DEF'],           cols:[{k:'sk',l:'SK'},{k:'dint',l:'INT'},{k:'fr',l:'FR'},{k:'ff',l:'FF'},{k:'sf',l:'SAF'},{k:'defTD',l:'TD'},{k:'blkk',l:'BLK'},{k:'pa',l:'PA'}] },
-  kicking:   { label:'Kicking',   positions:['K'],             cols:[{k:'pat',l:'PAT'},{k:'fg0',l:'FG0-39'},{k:'fg40',l:'FG40-49'},{k:'fg50',l:'FG50-59'},{k:'fg60',l:'FG60+'}] }
+  passing:   { label:'Passing',   positions:['QB'],           primaryPositions:['QB'],      sectioned:true,  cols:[{k:'py',l:'YDS'},{k:'ptd',l:'TD'},{k:'int',l:'INT'}] },
+  rushing:   { label:'Rushing',   positions:['QB','RB'],       primaryPositions:['RB'],      sectioned:true,  cols:[{k:'ry',l:'YDS'},{k:'rtd',l:'TD'}] },
+  receiving: { label:'Receiving', positions:['RB','WR','TE'],  primaryPositions:['WR','TE'], sectioned:true,  cols:[{k:'rec',l:'REC'},{k:'rey',l:'YDS'},{k:'retd',l:'TD'}] },
+  defense:   { label:'Defense',   positions:['DEF'],           primaryPositions:['DEF'],     sectioned:false, cols:[{k:'sk',l:'SK'},{k:'dint',l:'INT'},{k:'fr',l:'FR'},{k:'ff',l:'FF'},{k:'sf',l:'SAF'},{k:'defTD',l:'TD'},{k:'blkk',l:'BLK'},{k:'pa',l:'PA'}] },
+  kicking:   { label:'Kicking',   positions:['K'],             primaryPositions:['K'],       sectioned:false, cols:[{k:'pat',l:'PAT'},{k:'fg0',l:'FG0-39'},{k:'fg40',l:'FG40-49'},{k:'fg50',l:'FG50-59'},{k:'fg60',l:'FG60+'}] }
 };
 
 /* ---------- Schedule & derived Stats ---------- */
@@ -2158,7 +2172,7 @@ document.getElementById('addTxnBtn').addEventListener('click', ()=>{
 });
 
 let _seasonStatsCache = {};
-function invalidateSeasonStatsCache(){ _seasonStatsCache = {}; }
+function invalidateSeasonStatsCache(){ _seasonStatsCache = {}; _gameHistoryCache = {}; }
 
 function computeSeasonStats(year){
   if(_seasonStatsCache[year]) return _seasonStatsCache[year];
@@ -2295,64 +2309,85 @@ function renderStats(){
 
   let rows = Object.keys(combined).map(pKey=>{
     const c = combined[pKey];
-    if(!cat.positions.includes(normalizePos(c.pos))) return null;
+    const pos = normalizePos(c.pos);
+    if(cat.sectioned){
+      const hasStat = cat.cols.some(col=> (c.raw[col.k] || 0) !== 0);
+      if(!hasStat) return null;
+    } else {
+      if(!cat.positions.includes(pos)) return null;
+    }
     const primaryOwnerId = c.teamKeys[0] ? c.teamKeys[0].split('::')[1] : null;
     const primaryOwner = data.owners.find(o=>o.id === primaryOwnerId);
     const row = {
       pKey, name: c.name, pos: c.pos, teamCount: c.teamKeys.length, teamKeys: c.teamKeys, gs: c.gs, points: c.points,
-      ownerId: primaryOwnerId, team: primaryOwner ? (primaryOwner.team || primaryOwner.name) : ''
+      ownerId: primaryOwnerId, team: primaryOwner ? (primaryOwner.team || primaryOwner.name) : '',
+      isPrimary: cat.sectioned ? cat.primaryPositions.includes(pos) : true,
+      isTE: pos === 'TE'
     };
     cat.cols.forEach(col=>{ row[col.k] = c.raw[col.k] || 0; });
     return row;
   }).filter(Boolean);
 
-  rows.sort((a,b)=>{
-    const dir = statsSortDir === 'asc' ? 1 : -1;
-    const av = a[statsSortCol], bv = b[statsSortCol];
-    if(typeof av === 'string') return av.localeCompare(bv) * dir;
-    return (av - bv) * dir;
-  });
+  function sortRows(list){
+    return list.slice().sort((a,b)=>{
+      const dir = statsSortDir === 'asc' ? 1 : -1;
+      const av = a[statsSortCol], bv = b[statsSortCol];
+      if(typeof av === 'string') return av.localeCompare(bv) * dir;
+      return (av - bv) * dir;
+    });
+  }
+
+  const primaryRows = sortRows(rows.filter(r=> r.isPrimary));
+  const otherRows = cat.sectioned ? sortRows(rows.filter(r=> !r.isPrimary)) : [];
 
   const headCols = [
-    { k:'team', l:'Team' }, { k:'name', l:'Player' }, { k:'gs', l:'GS', num:true },
+    { k:'team', l:'' }, { k:'name', l:'Player' }, { k:'gs', l:'GS', num:true },
     ...cat.cols.map(c=>({ k:c.k, l:c.l, num:true })),
     { k:'points', l:'FPTS', num:true }
   ];
   head.innerHTML = headCols.map(c=>`
-    <th class="${c.num ? 'num' : ''} ${c.k === statsSortCol ? 'sorted' : ''}" data-sort="${c.k}">${c.l}${c.k === statsSortCol ? `<span class="sort-arrow">${statsSortDir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>
+    <th class="${c.num ? 'num' : ''} ${c.k === statsSortCol ? 'sorted' : ''} ${c.k === 'team' ? 'stats-team-col' : ''}" data-sort="${c.k}">${c.l}${c.k === statsSortCol ? `<span class="sort-arrow">${statsSortDir === 'asc' ? '▲' : '▼'}</span>` : ''}</th>
   `).join('');
 
-  if(rows.length === 0){
+  function rowHTML(r){
+    const mainRow = `
+      <tr class="${r.isTE ? 'te-row' : ''}">
+        <td class="stats-team-col">${r.ownerId ? teamLogoHTML(r.ownerId, currentSeason) : ''}</td>
+        <td>${r.teamCount > 1 ? `<button class="expand-toggle" data-expand="${r.pKey}">▸</button>` : ''}${r.name}${r.teamCount > 1 ? ` <span class="hint" style="display:inline;">(${r.teamCount} teams)</span>` : ''}</td>
+        <td class="num">${r.gs}</td>
+        ${cat.cols.map(c=>`<td class="num">${r[c.k]}</td>`).join('')}
+        <td class="num">${r.points.toFixed(2)}</td>
+      </tr>
+    `;
+    let splitRows = '';
+    if(r.teamCount > 1){
+      splitRows = r.teamKeys.map(tk=>{
+        const tr = byTeam[tk];
+        return `
+          <tr class="split-row ${r.isTE ? 'te-row' : ''}" data-parent="${r.pKey}" style="display:none;">
+            <td class="stats-team-col">${teamLogoHTML(tr.ownerId, currentSeason)}</td>
+            <td style="padding-left:1rem; color:var(--ink-soft);">↳ ${r.name}</td>
+            <td class="num">${tr.gs}</td>
+            ${cat.cols.map(c=>`<td class="num">${tr.raw[c.k] || 0}</td>`).join('')}
+            <td class="num">${tr.points.toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    return mainRow + splitRows;
+  }
+
+  if(primaryRows.length === 0 && otherRows.length === 0){
     body.innerHTML = `<tr><td colspan="${headCols.length}" style="color:var(--ink-soft); font-size:.85rem;">No ${cat.label.toLowerCase()} stats logged this season yet.</td></tr>`;
   } else {
-    body.innerHTML = rows.map(r=>{
-      const mainRow = `
-        <tr>
-          <td>${r.ownerId ? teamLogoHTML(r.ownerId, currentSeason) : ''} ${r.team}</td>
-          <td>${r.teamCount > 1 ? `<button class="expand-toggle" data-expand="${r.pKey}">▸</button>` : ''}${r.name}${r.teamCount > 1 ? ` <span class="hint" style="display:inline;">(${r.teamCount} teams)</span>` : ''}</td>
-          <td class="num">${r.gs}</td>
-          ${cat.cols.map(c=>`<td class="num">${r[c.k]}</td>`).join('')}
-          <td class="num">${r.points.toFixed(2)}</td>
-        </tr>
-      `;
-      let splitRows = '';
-      if(r.teamCount > 1){
-        splitRows = r.teamKeys.map(tk=>{
-          const tr = byTeam[tk];
-          const owner = data.owners.find(o=>o.id === tr.ownerId);
-          return `
-            <tr class="split-row" data-parent="${r.pKey}" style="display:none;">
-              <td>${teamLogoHTML(tr.ownerId, currentSeason)} ${owner ? (owner.team || owner.name) : 'Unknown team'}</td>
-              <td style="padding-left:1rem; color:var(--ink-soft);">↳ ${r.name}</td>
-              <td class="num">${tr.gs}</td>
-              ${cat.cols.map(c=>`<td class="num">${tr.raw[c.k] || 0}</td>`).join('')}
-              <td class="num">${tr.points.toFixed(2)}</td>
-            </tr>
-          `;
-        }).join('');
-      }
-      return mainRow + splitRows;
-    }).join('');
+    let html = primaryRows.length
+      ? primaryRows.map(rowHTML).join('')
+      : `<tr><td colspan="${headCols.length}" style="color:var(--ink-soft); font-size:.85rem;">No ${cat.label.toLowerCase()} stats logged this season yet.</td></tr>`;
+    if(otherRows.length){
+      html += `<tr class="stats-subsection-divider"><td colspan="${headCols.length}">Other positions with ${cat.label.toLowerCase()} stats</td></tr>`;
+      html += otherRows.map(rowHTML).join('');
+    }
+    body.innerHTML = html;
   }
 
   head.querySelectorAll('th[data-sort]').forEach(th=>{
@@ -3360,6 +3395,38 @@ function computeStarterSet(roster){
   return starters;
 }
 
+// Blends season-long PPG with recent form, so a player who's clearly heating up or
+// cooling off gets valued closer to what they're actually doing right now rather than
+// a cold season-long average — "adjust for recent performance as it makes sense."
+function projectedValue(p){
+  const raw = playerValue(p);
+  if(raw === null) return null;
+  const form = computeRecentForm(currentSeason, p.name);
+  if(!form || form.games < 3) return raw;
+  return raw * 0.5 + form.recentAvg * 0.5;
+}
+
+// Fast approximation of the optimal starting lineup total (greedy: sort by value, fill
+// the most restrictive slots first). Full computeStarterSet is exact but does real
+// backtracking search — far too slow to run tens of thousands of times per click, which
+// is exactly what evaluating every trade combination requires.
+function computeLineupTotalGreedy(roster, valueFn){
+  const slots = ensureLineupSlots();
+  const players = roster
+    .map(p=>({ p, pos: normalizePos(p.pos), val: valueFn(p) }))
+    .filter(x=> x.val !== null)
+    .sort((a,b)=> b.val - a.val);
+  const slotOrder = slots.map((_, i)=> i).sort((a,b)=> slots[a].length - slots[b].length);
+  const used = new Set();
+  let total = 0;
+  slotOrder.forEach(idx=>{
+    const eligible = slots[idx];
+    const pick = players.find(x=> !used.has(x) && eligible.includes(x.pos));
+    if(pick){ used.add(pick); total += pick.val; }
+  });
+  return total;
+}
+
 function depthAdjustedValue(player, starterSet, replacementLevels){
   const raw = playerValue(player);
   if(raw === null) return null;
@@ -3466,8 +3533,11 @@ function positionalNeedNote(sentAway, received, myRoster, myStarterSet, replacem
 
 // Every game a named player has a stat line for this season, in week order —
 // works across a team change mid-season since it scans every team's stats, not just one roster.
+let _gameHistoryCache = {};
 function getPlayerGameHistory(year, playerName){
   const key = statKey(playerName);
+  const cacheKey = year + ':' + key;
+  if(_gameHistoryCache[cacheKey]) return _gameHistoryCache[cacheKey];
   const history = [];
   (data.schedule[year] || []).forEach(g=>{
     Object.values(g.stats || {}).forEach(playerMap=>{
@@ -3476,6 +3546,7 @@ function getPlayerGameHistory(year, playerName){
     });
   });
   history.sort((a,b)=> a.week - b.week);
+  _gameHistoryCache[cacheKey] = history;
   return history;
 }
 
@@ -3605,24 +3676,49 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
   const maxStarters = maxStartersByPosition();
   const dedicatedSlots = dedicatedSlotsByPosition();
 
-  // Surplus/need only depends on (team, position) — compute it once per position up
-  // front instead of re-scanning each roster on every one of the ~47,000 combo checks.
+  // The real test of a trade: does it add points to my actual starting lineup? Uses
+  // recency-weighted projections, not cold season averages, so a hot bench guy or a
+  // fading starter gets valued closer to what they're doing right now.
+  // Only ~30 unique players are ever involved, but the lineup total gets recomputed on
+  // every one of the ~47,000 candidate trades — precompute each player's wrapper
+  // (position + projected value) once, since re-deriving and re-allocating fresh
+  // objects 95,000 times over is what actually made this slow, not the value lookups.
+  const wrapperMap = new Map();
+  [...rosterA, ...rosterB].forEach(p=> wrapperMap.set(p, { p, pos: normalizePos(p.pos), val: projectedValue(p) }));
+  const toWrappers = (roster)=> roster.map(p=> wrapperMap.get(p) || { p, pos: normalizePos(p.pos), val: projectedValue(p) });
+
+  const lineupSlots = ensureLineupSlots();
+  const slotOrder = lineupSlots.map((_, i)=> i).sort((a,b)=> lineupSlots[a].length - lineupSlots[b].length);
+
+  function fastLineupTotal(wrappers){
+    const sorted = wrappers.filter(x=> x.val !== null).slice().sort((a,b)=> b.val - a.val);
+    const used = new Set();
+    let total = 0;
+    for(const idx of slotOrder){
+      const eligible = lineupSlots[idx];
+      let pick = null;
+      for(const x of sorted){
+        if(used.has(x)) continue;
+        if(eligible.includes(x.pos)){ pick = x; break; }
+      }
+      if(pick){ used.add(pick); total += pick.val; }
+    }
+    return total;
+  }
+
+  const wrappersA = toWrappers(rosterA);
+  const wrappersB = toWrappers(rosterB);
+  const baseTotalA = fastLineupTotal(wrappersA);
+  const baseTotalB = fastLineupTotal(wrappersB);
+
+  // Surplus/need still matters as context (a trade can be points-positive AND fill a
+  // real hole, which is worth calling out) — computed once per position up front.
   const surplusA = {}, needA = {}, surplusB = {}, needB = {};
   const totalCountA = {}, totalCountB = {}, aboveReplCountA = {}, aboveReplCountB = {};
-  // The value of the worst CURRENT STARTER at each position — used to tell whether an
-  // incoming player would actually crack the lineup, or just add bench depth behind
-  // someone the team already has. No starters there at all means anyone starts.
-  const starterFloorA = {}, starterFloorB = {};
-
   function rawAboveReplCount(roster, pos){
     return roster.filter(p=> normalizePos(p.pos) === pos)
       .map(p=> playerValue(p))
       .filter(v=> v !== null && (v - (replacementLevels[pos] || 0)) > 0).length;
-  }
-  function starterFloor(roster, starterSet, pos){
-    const vals = roster.filter(p=> normalizePos(p.pos) === pos && starterSet.has(p))
-      .map(p=> playerValue(p)).filter(v=> v !== null);
-    return vals.length ? Math.min(...vals) : -Infinity;
   }
   TRADE_SUGGEST_POSITIONS.forEach(pos=>{
     surplusA[pos] = isSurplus(rosterA, starterSetA, pos, replacementLevels, maxStarters);
@@ -3633,19 +3729,22 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     totalCountB[pos] = rosterB.filter(p=> normalizePos(p.pos) === pos).length;
     aboveReplCountA[pos] = rawAboveReplCount(rosterA, pos);
     aboveReplCountB[pos] = rawAboveReplCount(rosterB, pos);
-    starterFloorA[pos] = starterFloor(rosterA, starterSetA, pos);
-    starterFloorB[pos] = starterFloor(rosterB, starterSetB, pos);
   });
 
   const trendCache = {};
-  function trendFlag(name){
+  function form(name){
     if(!(name in trendCache)) trendCache[name] = computeRecentForm(currentSeason, name);
-    const form = trendCache[name];
-    if(!form) return '';
-    if(form.trend === 'up') return ` (${name} is trending up lately — sell-high timing)`;
-    if(form.trend === 'down') return ` (${name} has cooled off recently — possible buy-low)`;
+    return trendCache[name];
+  }
+  function trendFlag(name){
+    const f = form(name);
+    if(!f) return '';
+    if(f.trend === 'up') return ` (${name} is trending up lately — sell-high timing)`;
+    if(f.trend === 'down') return ` (${name} has cooled off recently — possible buy-low)`;
     return '';
   }
+  function isCold(name){ const f = form(name); return f && f.trend === 'down'; }
+  function isHot(name){ const f = form(name); return f && f.trend === 'up'; }
 
   // Top-value tradeable pool per side, restricted to a manageable size so combination
   // search (for the bigger trade shapes) stays fast.
@@ -3666,16 +3765,6 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
       .slice(0, 8);
   }
 
-  // What is this player actually worth to the team RECEIVING them, given that team's
-  // own depth chart? If they wouldn't even crack the new team's starting lineup, they're
-  // just bench depth there — full value only applies if they're a real upgrade.
-  function valueToTeam(entry, floorTable){
-    const repl = replacementLevels[entry.pos] || 0;
-    const trueVal = entry.raw - repl;
-    const wouldStart = entry.raw > (floorTable[entry.pos] ?? -Infinity);
-    return { value: wouldStart ? trueVal : trueVal * 0.5, wouldStart };
-  }
-
   function combinationsOf(arr, k){
     const out = [];
     (function helper(start, combo){
@@ -3689,16 +3778,13 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     return out;
   }
 
-  // 1 = trades of 1-2 players per side (the everyday stuff), 2 = 3-player-max shapes
-  // (uncommon, needs a tighter fit), 3 = anything touching 4 or 5 players on a side
-  // (a real blockbuster — needs both fairness AND a strong need-fit story).
   function shapeTier(n, m){
     if(n <= 2 && m <= 2) return 'common';
     if(n <= 3 && m <= 3) return 'rare';
     return 'veryrare';
   }
-  const TIER_VALUE_THRESHOLD = { common: 0.30, rare: 0.16, veryrare: 0.09 };
-  const TIER_MIN_NEEDFIT = { common: 0, rare: 0.4, veryrare: 1.1 };
+  // Bigger, weirder-shaped trades need a cleaner points case, not just "not a loss."
+  const TIER_MIN_DELTA = { common: 0, rare: 1.5, veryrare: 4 };
 
   function needFitScore(comboA, comboB){
     let score = 0;
@@ -3716,15 +3802,14 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
     return out;
   }
 
-  // Does this trade leave either team with an actual, self-inflicted hole at a position
-  // they were fine at before? "Severe" = literally nobody left at that position at all.
-  // "Moderate" = still have warm bodies, just nobody above replacement level (streamable).
+  // Separate from the points-delta check: does this trade leave either team with zero
+  // rostered players at a position (a bye-week/injury resilience risk that an average-
+  // PPG-based delta wouldn't catch)?
   function bankruptcyCheck(comboA, comboB){
     const leavingA = countByPos(comboA, false), arrivingA = countByPos(comboB, false);
     const leavingAAbove = countByPos(comboA, true), arrivingAAbove = countByPos(comboB, true);
     const leavingB = countByPos(comboB, false), arrivingB = countByPos(comboA, false);
     const leavingBAbove = countByPos(comboB, true), arrivingBAbove = countByPos(comboA, true);
-
     let severeA = [], moderateA = [], severeB = [], moderateB = [];
     const posTouched = new Set([...comboA.map(x=>x.pos), ...comboB.map(x=>x.pos)]);
     posTouched.forEach(pos=>{
@@ -3752,107 +3837,83 @@ function suggestTradesLocally(nameA, nameB, rosterA, rosterB){
 
   const poolA = buildPool(rosterA, starterSetA);
   const poolB = buildPool(rosterB, starterSetB);
+  // Blockbuster-sized shapes (4-5 players on a side) need a much better fit to even
+  // qualify anyway — searching a slightly smaller top slice of each pool for those
+  // specifically keeps the combinatorics sane without losing coverage where it matters
+  // (the common 1-2 player shapes still search the full pool).
+  const poolASmall = poolA.slice(0, 6);
+  const poolBSmall = poolB.slice(0, 6);
 
   const combosA = {}, combosB = {};
   for(let k = 1; k <= 5; k++){
-    combosA[k] = combinationsOf(poolA, k);
-    combosB[k] = combinationsOf(poolB, k);
+    combosA[k] = combinationsOf(k >= 4 ? poolASmall : poolA, k);
+    combosB[k] = combinationsOf(k >= 4 ? poolBSmall : poolB, k);
   }
 
   const candidates = [];
   for(let n = 1; n <= 5; n++){
     for(let m = 1; m <= 5; m++){
       const tier = shapeTier(n, m);
-      const valueThreshold = TIER_VALUE_THRESHOLD[tier];
-      const minNeedFit = TIER_MIN_NEEDFIT[tier];
+      const minDelta = TIER_MIN_DELTA[tier];
       const listA = combosA[n], listB = combosB[m];
       if(!listA.length || !listB.length) continue;
 
       listA.forEach(comboA=>{
         listB.forEach(comboB=>{
-          // What each side is giving up, in their OWN current context (unchanged) —
-          // and, critically, what each side is actually GETTING, valued in the
-          // RECEIVING team's context. A player who wouldn't even start on his new
-          // team is only worth half as much to that team, no matter how good he
-          // looked on his old roster.
-          const totalA = comboA.reduce((s,x)=> s + x.val, 0);
-          const totalB = comboB.reduce((s,x)=> s + x.val, 0);
-          const receivedA = comboB.reduce((s,x)=> s + valueToTeam(x, starterFloorA).value, 0);
-          const receivedB = comboA.reduce((s,x)=> s + valueToTeam(x, starterFloorB).value, 0);
+          const outSetA = new Set(comboA.map(x=> x.p));
+          const outSetB = new Set(comboB.map(x=> x.p));
+          const postWrappersA = wrappersA.filter(w=> !outSetA.has(w.p)).concat(comboB.map(x=> wrapperMap.get(x.p)));
+          const postWrappersB = wrappersB.filter(w=> !outSetB.has(w.p)).concat(comboA.map(x=> wrapperMap.get(x.p)));
 
-          const diffPctA = Math.abs(totalA - receivedA) / (Math.abs(totalA) + Math.abs(receivedA) || 1);
-          const diffPctB = Math.abs(totalB - receivedB) / (Math.abs(totalB) + Math.abs(receivedB) || 1);
-          const diffPct = Math.max(diffPctA, diffPctB);
+          const deltaA = fastLineupTotal(postWrappersA) - baseTotalA;
+          const deltaB = fastLineupTotal(postWrappersB) - baseTotalB;
 
-          // Cheap pre-filter first: reject outright unless this is either a normal fair
-          // trade, or lopsided enough in someone's favor that it could plausibly justify
-          // gutting a position (checked properly just below). Skips the expensive
-          // bankruptcy scan for the vast majority of combos that have no shot either way.
-          const passesNormalFairness = diffPct <= valueThreshold;
-          if(!passesNormalFairness){
-            const edgeForA = (receivedA - totalA) / (totalA || 1);
-            const edgeForB = (receivedB - totalB) / (totalB || 1);
-            if(edgeForA < 0.35 && edgeForB < 0.35) return;
-          }
+          // Wiggle room: trading a cooling player away, or receiving a heating-up one,
+          // is still worth suggesting even at a small or borderline lineup cost.
+          const aNamesRaw = comboA.map(x=> x.p.name), bNamesRaw = comboB.map(x=> x.p.name);
+          const aHasWiggle = aNamesRaw.some(isCold) || bNamesRaw.some(isHot);
+          const bHasWiggle = bNamesRaw.some(isCold) || aNamesRaw.some(isHot);
+          const floorA = aHasWiggle ? -3 : minDelta;
+          const floorB = bHasWiggle ? -3 : minDelta;
+
+          if(deltaA < floorA || deltaB < floorB) return;
 
           const bankruptcy = bankruptcyCheck(comboA, comboB);
           const hasSevere = bankruptcy.severeA.length || bankruptcy.severeB.length;
-
-          // A "fair" value trade isn't enough justification to gut a position down to
-          // nothing — that only makes sense when the side taking the risk is clearly
-          // winning the trade on value, the way giving up your only RB and WR for a
-          // truly elite QB might be. Require a real value edge, not just closeness.
+          // A real points gain justifies the resilience risk on its own terms; otherwise
+          // don't let a team empty a position out for a marginal or wiggle-room-only deal.
           if(hasSevere){
-            const aRisking = bankruptcy.severeA.length > 0;
-            const bRisking = bankruptcy.severeB.length > 0;
-            const edgeForA = (receivedA - totalA) / (totalA || 1);
-            const edgeForB = (receivedB - totalB) / (totalB || 1);
-            if(aRisking && edgeForA < 0.35) return;
-            if(bRisking && edgeForB < 0.35) return;
-          } else if(!passesNormalFairness){
-            return;
+            if(bankruptcy.severeA.length && deltaA < 2) return;
+            if(bankruptcy.severeB.length && deltaB < 2) return;
           }
 
           const needFit = needFitScore(comboA, comboB);
-          if(!hasSevere && needFit < minNeedFit) return;
-
-          const complexityPenalty = (n + m) * 0.6;
+          const complexityPenalty = (n + m) * 0.5;
           const bankruptcyPenalty = (bankruptcy.severeA.length + bankruptcy.severeB.length) * 5
             + (bankruptcy.moderateA.length + bankruptcy.moderateB.length) * 2;
-          const score = needFit * 3 - diffPct * 10 - complexityPenalty - bankruptcyPenalty;
+          const score = Math.min(deltaA, deltaB) + (deltaA + deltaB) * 0.3 + needFit * 1.5 - complexityPenalty - bankruptcyPenalty;
 
-          const aNames = comboA.map(x=> x.p.name);
-          const bNames = comboB.map(x=> x.p.name);
-          const trendNotes = [...aNames, ...bNames].map(trendFlag).join('');
-
-          // Call out anyone who'd just be bench depth on their new team, not an upgrade.
-          const benchOnlyNotes = [];
-          comboB.forEach(x=>{ if(!valueToTeam(x, starterFloorA).wouldStart) benchOnlyNotes.push(`${x.p.name} would be bench depth for ${nameA}, not a lineup upgrade`); });
-          comboA.forEach(x=>{ if(!valueToTeam(x, starterFloorB).wouldStart) benchOnlyNotes.push(`${x.p.name} would be bench depth for ${nameB}, not a lineup upgrade`); });
-          const benchOnlySentence = benchOnlyNotes.length ? ` ${benchOnlyNotes.join('; ')}.` : '';
+          const trendNotes = [...aNamesRaw, ...bNamesRaw].map(trendFlag).join('');
 
           let riskSentence = '';
-          if(bankruptcy.severeA.length){
-            riskSentence += ` Heads up — this leaves ${nameA} with no rostered ${bankruptcy.severeA.join('/')} at all; only worth it because of how lopsided the value is in their favor.`;
-          }
-          if(bankruptcy.severeB.length){
-            riskSentence += ` Heads up — this leaves ${nameB} with no rostered ${bankruptcy.severeB.join('/')} at all; only worth it because of how lopsided the value is in their favor.`;
-          }
-          if(bankruptcy.moderateA.length){
-            riskSentence += ` ${nameA} is left without an above-replacement ${bankruptcy.moderateA.join('/')} — thin, but streamable.`;
-          }
-          if(bankruptcy.moderateB.length){
-            riskSentence += ` ${nameB} is left without an above-replacement ${bankruptcy.moderateB.join('/')} — thin, but streamable.`;
-          }
-          const needSentence = (riskSentence || benchOnlySentence) ? '' : (needFit >= 1
-            ? ` Both sides are dealing from real depth to fill an actual need, not just matching numbers.`
-            : (needFit > 0 ? ` There's some real need-filling here on top of the raw value match.` : ''));
+          if(bankruptcy.severeA.length) riskSentence += ` Heads up — this leaves ${nameA} with no rostered ${bankruptcy.severeA.join('/')} at all.`;
+          if(bankruptcy.severeB.length) riskSentence += ` Heads up — this leaves ${nameB} with no rostered ${bankruptcy.severeB.join('/')} at all.`;
+          if(bankruptcy.moderateA.length) riskSentence += ` ${nameA} is left without an above-replacement ${bankruptcy.moderateA.join('/')} — thin, but streamable.`;
+          if(bankruptcy.moderateB.length) riskSentence += ` ${nameB} is left without an above-replacement ${bankruptcy.moderateB.join('/')} — thin, but streamable.`;
+
+          const wiggleNote = (aHasWiggle && deltaA < minDelta) ? ` (${nameA}'s side leans on recent form more than raw points, given the trend.)`
+            : (bHasWiggle && deltaB < minDelta) ? ` (${nameB}'s side leans on recent form more than raw points, given the trend.)` : '';
+
+          const needSentence = needFit > 0 ? ` Also addresses real positional need/surplus on top of the points gain.` : '';
 
           candidates.push({
-            names: [...aNames, ...bNames],
-            aSends: aNames, bSends: bNames,
+            names: [...aNamesRaw, ...bNamesRaw],
+            aSends: aNamesRaw, bSends: bNamesRaw,
             score,
-            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNames.join(', ')} for ${nameB}'s ${bNames.join(', ')} (${nameA} gives up ${totalA.toFixed(2)} value for ${receivedA.toFixed(2)} in return; ${nameB} gives up ${totalB.toFixed(2)} for ${receivedB.toFixed(2)}).${needSentence}${riskSentence}${benchOnlySentence}${trendNotes}`
+            rationale: `${describeShape(n, m)}: ${nameA} sends ${aNamesRaw.join(', ')} for ${nameB}'s ${bNamesRaw.join(', ')}. `
+              + `${nameA}'s starting lineup ${deltaA >= 0 ? 'gains' : 'loses'} ${Math.abs(deltaA).toFixed(2)} pts/week; `
+              + `${nameB}'s ${deltaB >= 0 ? 'gains' : 'loses'} ${Math.abs(deltaB).toFixed(2)} pts/week.`
+              + `${wiggleNote}${needSentence}${riskSentence}${trendNotes}`
           });
         });
       });
