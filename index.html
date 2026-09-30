@@ -194,6 +194,7 @@
   .digest-article{ max-width:640px; margin:0 auto 1.6rem; }
   .digest-article h3{ font-size:1rem; color:var(--field); border-bottom:2px solid var(--mustard); padding-bottom:.3rem; margin-bottom:.5rem; }
   .body-text{ white-space:pre-wrap; }
+  .richtext, .richtext *{ font-family:inherit !important; font-size:inherit !important; color:inherit !important; line-height:inherit !important; }
   .digest-article .body-text{ font-size:.92rem; min-height:1.4em; }
   .digest-article .body-text:empty::before{ content:attr(data-placeholder); color:var(--ink-soft); font-style:italic; }
 
@@ -1420,7 +1421,7 @@ function renderWeeklyReviewNarrative(entry){
       </div>
 
       <h3>Recap</h3>
-      <div class="body-text editable-field" id="reviewText" data-placeholder="Write this week's recap..." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
+      <div class="body-text richtext editable-field" id="reviewText" data-placeholder="Write this week's recap..." ${editMode?'contenteditable="true"':''}>${entry.review || ''}</div>
     </div>
   `;
 }
@@ -1497,7 +1498,7 @@ function matchupCardHTML(m, isGotw){
         <div class="vs-label">VS</div>
         ${teamSideHTML(m, 'B')}
       </div>
-      <div class="matchup-writeup body-text editable-field" data-mid="${m.id}" data-field="writeup" ${editMode?'contenteditable="true"':''} data-placeholder="Matchup write-up...">${m.writeup}</div>
+      <div class="matchup-writeup body-text richtext editable-field" data-mid="${m.id}" data-field="writeup" ${editMode?'contenteditable="true"':''} data-placeholder="Matchup write-up...">${m.writeup}</div>
       <table class="positions-table"><tbody>
         ${m.positions.map(p=>`
           <tr>
@@ -1516,7 +1517,7 @@ function matchupCardHTML(m, isGotw){
       </div>
       <div class="prediction-row">
         <span class="field-label">My Prediction</span>
-        <div class="body-text editable-field" data-mid="${m.id}" data-field="prediction" ${editMode?'contenteditable="true"':''}>${m.prediction}</div>
+        <div class="body-text richtext editable-field" data-mid="${m.id}" data-field="prediction" ${editMode?'contenteditable="true"':''}>${m.prediction}</div>
       </div>
       ${editMode ? `
         <div class="matchup-foot">
@@ -1727,12 +1728,12 @@ function teamPageHTML(entry, ownerId, year){
           </div>
           <div class="kp-text">
             <span class="kp-name editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="name" ${editMode?'contenteditable="true"':''}>${kp.name || (editMode ? 'Player name' : '')}</span>
-            <div class="kp-summary editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="summary" ${editMode?'contenteditable="true"':''} data-placeholder="Quick summary...">${kp.summary || ''}</div>
+            <div class="kp-summary richtext editable-field" data-tp="${ownerId}" data-kp="${i}" data-field="summary" ${editMode?'contenteditable="true"':''} data-placeholder="Quick summary...">${kp.summary || ''}</div>
           </div>
         </div>
       `).join('')}
       <h4>Synopsis</h4>
-      <div class="synopsis-text editable-field" data-tp="${ownerId}" data-field="synopsis" ${editMode?'contenteditable="true"':''} data-placeholder="Full team synopsis...">${tp.synopsis || ''}</div>
+      <div class="synopsis-text richtext editable-field" data-tp="${ownerId}" data-field="synopsis" ${editMode?'contenteditable="true"':''} data-placeholder="Full team synopsis...">${tp.synopsis || ''}</div>
     </div>
   `;
 }
@@ -1780,7 +1781,7 @@ function bracketPageHTML(entry){
     <div class="digest-article">
       <h3>Playoff Bracket Prediction</h3>
       <div id="digestBracketRoot"></div>
-      <div class="body-text editable-field" id="bracketNotes" data-placeholder="Bold predictions, sleeper picks, trash talk..." ${editMode?'contenteditable="true"':''}>${entry.bracketNotes || ''}</div>
+      <div class="body-text richtext editable-field" id="bracketNotes" data-placeholder="Bold predictions, sleeper picks, trash talk..." ${editMode?'contenteditable="true"':''}>${entry.bracketNotes || ''}</div>
     </div>
   `;
 }
@@ -4133,6 +4134,51 @@ async function refreshAllPanels(){
   renderPowerRankingsSelect();
   renderPowerRankingsTab();
 }
+
+// Rich-text fields (Recap, matchup write-up/prediction, team synopsis, key player
+// summary, bracket notes) support bold and paragraph breaks so people can paste
+// formatted text in — but a straight paste also drags along the SOURCE's font,
+// size, and color as inline styles, which then overrides the site's own look.
+// Strip everything except the structure/emphasis we actually want to keep.
+function sanitizePastedHTML(html){
+  const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'DIV', 'P']);
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  (function clean(node){
+    [...node.childNodes].forEach(child=>{
+      if(child.nodeType === 1){
+        if(!allowedTags.has(child.tagName)){
+          while(child.firstChild) node.insertBefore(child.firstChild, child);
+          node.removeChild(child);
+        } else {
+          child.removeAttribute('style');
+          child.removeAttribute('class');
+          child.removeAttribute('id');
+          clean(child);
+        }
+      } else if(child.nodeType !== 3){
+        node.removeChild(child);
+      }
+    });
+  })(temp);
+  return temp.innerHTML;
+}
+
+document.addEventListener('paste', (e)=>{
+  const target = e.target;
+  if(!target || !target.isContentEditable || !target.classList || !target.classList.contains('richtext')) return;
+  e.preventDefault();
+  const cd = e.clipboardData || window.clipboardData;
+  const html = cd.getData('text/html');
+  let insertHtml;
+  if(html){
+    insertHtml = sanitizePastedHTML(html);
+  } else {
+    const text = cd.getData('text/plain') || '';
+    insertHtml = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  }
+  document.execCommand('insertHTML', false, insertHtml);
+});
 
 document.getElementById('editToggle').addEventListener('click', ()=>{
   if(!sb){ toast('Supabase isn\'t configured yet — fill in SUPABASE_URL and SUPABASE_ANON_KEY.'); return; }
