@@ -917,13 +917,12 @@ function renderRosters(){
     const table = document.createElement('table');
     const tbody = document.createElement('tbody');
     const players = data.rosters[currentSeason][owner.id] || [];
-    const POS_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF', 'K'];
     const displayOrder = players.map((p, pi)=> ({ p, pi }));
     displayOrder.sort((a, b)=>{
-      const oa = POS_ORDER.indexOf(normalizePos(a.p.pos));
-      const ob = POS_ORDER.indexOf(normalizePos(b.p.pos));
-      const ra = oa === -1 ? POS_ORDER.length : oa;
-      const rb = ob === -1 ? POS_ORDER.length : ob;
+      const oa = ROSTER_POS_ORDER.indexOf(normalizePos(a.p.pos));
+      const ob = ROSTER_POS_ORDER.indexOf(normalizePos(b.p.pos));
+      const ra = oa === -1 ? ROSTER_POS_ORDER.length : oa;
+      const rb = ob === -1 ? ROSTER_POS_ORDER.length : ob;
       if(ra !== rb) return ra - rb;
       return (a.p.name || '').localeCompare(b.p.name || '');
     });
@@ -1915,6 +1914,18 @@ function normalizePos(pos){
   return 'OTHER';
 }
 
+const ROSTER_POS_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF', 'K'];
+function sortByPositionThenName(players){
+  return [...players].sort((a, b)=>{
+    const oa = ROSTER_POS_ORDER.indexOf(normalizePos(a.pos));
+    const ob = ROSTER_POS_ORDER.indexOf(normalizePos(b.pos));
+    const ra = oa === -1 ? ROSTER_POS_ORDER.length : oa;
+    const rb = ob === -1 ? ROSTER_POS_ORDER.length : ob;
+    if(ra !== rb) return ra - rb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
 const OFFENSIVE_FIELDS = [
   { k:'py', l:'Pass Yds' }, { k:'ptd', l:'Pass TD' }, { k:'int', l:'INT' }, { k:'pass2pt', l:'2pt Pass' },
   { k:'ry', l:'Rush Yds' }, { k:'rtd', l:'Rush TD' }, { k:'rush2pt', l:'2pt Rush' },
@@ -2105,10 +2116,12 @@ function renderAddTxnForm(){
         <select id="newTxnAction" style="margin-left:.4rem;">
           <option value="add">Add (pick up a free agent)</option>
           <option value="drop">Drop</option>
+          <option value="trade">Trade</option>
         </select>
       </label>
       <label>Week <input type="number" id="newTxnWeek" min="1" max="18" value="1" style="width:70px; margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
-      <label>Team <select id="newTxnTeam" style="margin-left:.4rem;"></select></label>
+
+      <div id="newTxnSingleTeamField"><label>Team <select id="newTxnTeam" style="margin-left:.4rem;"></select></label></div>
       <div id="newTxnAddFields">
         <label>Player name <input type="text" id="newTxnPlayerName" style="margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
         <label style="margin-left:.8rem;">Position
@@ -2120,6 +2133,21 @@ function renderAddTxnForm(){
       <div id="newTxnDropFields" style="display:none;">
         <label>Player <select id="newTxnDropPlayer" style="margin-left:.4rem;"></select></label>
       </div>
+
+      <div id="newTxnTradeFields" style="display:none; flex-direction:column; gap:.6rem;">
+        <p class="hint" style="margin:0;">Check every player moving each direction — trades often involve more than one player per side.</p>
+        <div style="display:flex; gap:.8rem; flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <label>Team A <select id="newTxnTradeTeamA" style="margin-left:.4rem; width:100%;"></select></label>
+            <div id="newTxnTradeRosterA" style="margin-top:.4rem; max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:.4rem;"></div>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label>Team B <select id="newTxnTradeTeamB" style="margin-left:.4rem; width:100%;"></select></label>
+            <div id="newTxnTradeRosterB" style="margin-top:.4rem; max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:.4rem;"></div>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex; gap:.5rem;">
         <button class="btn btn-primary small" id="submitTxnBtn">Log transaction</button>
         <button class="btn small" id="cancelTxnBtn">Cancel</button>
@@ -2132,32 +2160,78 @@ function renderAddTxnForm(){
   function refreshDropOptions(){
     const ownerId = teamSel.value;
     const roster = data.rosters[currentSeason]?.[ownerId] || [];
-    document.getElementById('newTxnDropPlayer').innerHTML = roster.map(p=>`<option value="${p.name}" data-pos="${p.pos}">${p.name} (${p.pos})</option>`).join('') || '<option value="">No players on this roster</option>';
+    document.getElementById('newTxnDropPlayer').innerHTML = sortByPositionThenName(roster).map(p=>`<option value="${p.name}" data-pos="${p.pos}">${p.name} (${p.pos})</option>`).join('') || '<option value="">No players on this roster</option>';
   }
   refreshDropOptions();
   teamSel.addEventListener('change', refreshDropOptions);
 
+  // --- Trade fields ---
+  const teamASel = document.getElementById('newTxnTradeTeamA');
+  const teamBSel = document.getElementById('newTxnTradeTeamB');
+  teamASel.innerHTML = data.owners.map(o=>`<option value="${o.id}">${o.team || o.name}</option>`).join('');
+  teamBSel.innerHTML = data.owners.map(o=>`<option value="${o.id}">${o.team || o.name}</option>`).join('');
+  if(data.owners.length > 1) teamBSel.value = data.owners[1].id;
+
+  function renderTradeRosterCheckboxes(containerId, ownerId){
+    const roster = data.rosters[currentSeason]?.[ownerId] || [];
+    const container = document.getElementById(containerId);
+    if(roster.length === 0){ container.innerHTML = '<p class="hint" style="margin:0;">No players on this roster.</p>'; return; }
+    container.innerHTML = sortByPositionThenName(roster).map(p=>`
+      <label style="display:block; padding:.15rem 0;">
+        <input type="checkbox" class="trade-player-check" value="${p.name}" data-pos="${p.pos}"> ${p.name} <span class="pos-tag">${p.pos}</span>
+      </label>
+    `).join('');
+  }
+  function refreshTradeRosters(){
+    renderTradeRosterCheckboxes('newTxnTradeRosterA', teamASel.value);
+    renderTradeRosterCheckboxes('newTxnTradeRosterB', teamBSel.value);
+  }
+  refreshTradeRosters();
+  teamASel.addEventListener('change', refreshTradeRosters);
+  teamBSel.addEventListener('change', refreshTradeRosters);
+
   document.getElementById('newTxnAction').addEventListener('change', (e)=>{
-    document.getElementById('newTxnAddFields').style.display = e.target.value === 'add' ? 'block' : 'none';
-    document.getElementById('newTxnDropFields').style.display = e.target.value === 'drop' ? 'block' : 'none';
+    const action = e.target.value;
+    document.getElementById('newTxnSingleTeamField').style.display = action === 'trade' ? 'none' : 'block';
+    document.getElementById('newTxnAddFields').style.display = action === 'add' ? 'block' : 'none';
+    document.getElementById('newTxnDropFields').style.display = action === 'drop' ? 'block' : 'none';
+    document.getElementById('newTxnTradeFields').style.display = action === 'trade' ? 'flex' : 'none';
   });
 
   document.getElementById('submitTxnBtn').addEventListener('click', ()=>{
     const action = document.getElementById('newTxnAction').value;
     const week = Number(document.getElementById('newTxnWeek').value) || 1;
-    const ownerId = teamSel.value;
-    let playerName, playerPos;
-    if(action === 'add'){
-      playerName = document.getElementById('newTxnPlayerName').value.trim();
-      playerPos = document.getElementById('newTxnPlayerPos').value;
-      if(!playerName){ toast('Enter a player name'); return; }
+
+    if(action === 'trade'){
+      const aId = teamASel.value, bId = teamBSel.value;
+      if(aId === bId){ toast('Pick two different teams'); return; }
+      const aGives = [...document.querySelectorAll('#newTxnTradeRosterA .trade-player-check:checked')].map(el=>({ name: el.value, pos: el.dataset.pos }));
+      const bGives = [...document.querySelectorAll('#newTxnTradeRosterB .trade-player-check:checked')].map(el=>({ name: el.value, pos: el.dataset.pos }));
+      if(aGives.length === 0 && bGives.length === 0){ toast('Check at least one player'); return; }
+      aGives.forEach(p=>{
+        addTransaction(currentSeason, week, aId, 'drop', p.name, p.pos);
+        addTransaction(currentSeason, week, bId, 'add', p.name, p.pos);
+      });
+      bGives.forEach(p=>{
+        addTransaction(currentSeason, week, bId, 'drop', p.name, p.pos);
+        addTransaction(currentSeason, week, aId, 'add', p.name, p.pos);
+      });
     } else {
-      const dropSel = document.getElementById('newTxnDropPlayer');
-      playerName = dropSel.value;
-      playerPos = dropSel.selectedOptions[0]?.dataset.pos || '';
-      if(!playerName){ toast('No player selected'); return; }
+      const ownerId = teamSel.value;
+      let playerName, playerPos;
+      if(action === 'add'){
+        playerName = document.getElementById('newTxnPlayerName').value.trim();
+        playerPos = document.getElementById('newTxnPlayerPos').value;
+        if(!playerName){ toast('Enter a player name'); return; }
+      } else {
+        const dropSel = document.getElementById('newTxnDropPlayer');
+        playerName = dropSel.value;
+        playerPos = dropSel.selectedOptions[0]?.dataset.pos || '';
+        if(!playerName){ toast('No player selected'); return; }
+      }
+      addTransaction(currentSeason, week, ownerId, action, playerName, playerPos);
     }
-    addTransaction(currentSeason, week, ownerId, action, playerName, playerPos);
+
     saveData();
     box.style.display = 'none';
     renderTxnList();
@@ -3100,9 +3174,11 @@ function renderGameDetail(){
       const started = entry ? entry.started !== false : true;
       (started ? starters : bench).push(p);
     });
-    return starters.map(p=> playerBlock(ownerId, p)).join('')
-      + (bench.length ? '<div class="bench-divider">Bench</div>' : '')
-      + bench.map(p=> playerBlock(ownerId, p)).join('');
+    const sortedStarters = sortByPositionThenName(starters);
+    const sortedBench = sortByPositionThenName(bench);
+    return sortedStarters.map(p=> playerBlock(ownerId, p)).join('')
+      + (sortedBench.length ? '<div class="bench-divider">Bench</div>' : '')
+      + sortedBench.map(p=> playerBlock(ownerId, p)).join('');
   }
 
   root.innerHTML = `
