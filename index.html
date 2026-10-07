@@ -2502,8 +2502,20 @@ function computeStandings(year, throughWeek){
   return table;
 }
 
+// Splits a list into ordered clusters of still-tied members, sorted by keyFn descending.
+// Each returned cluster has every member sharing the exact same key value.
+function clusterByKey(items, keyFn){
+  const buckets = {};
+  items.forEach(id=>{
+    const key = keyFn(id).toFixed(6);
+    (buckets[key] = buckets[key] || []).push(id);
+  });
+  return Object.keys(buckets).sort((a,b)=> Number(b) - Number(a)).map(k=> buckets[k]);
+}
+
 function tiebreakGroup(group, games, table){
   if(group.length <= 1) return group;
+
   const h2h = {};
   group.forEach(id=>{ h2h[id] = { w:0, l:0, t:0 }; });
   games.forEach(g=>{
@@ -2513,15 +2525,33 @@ function tiebreakGroup(group, games, table){
       else { h2h[g.homeId].t++; h2h[g.awayId].t++; }
     }
   });
-  return [...group].sort((a,b)=>{
-    const aGP = h2h[a].w + h2h[a].l + h2h[a].t, bGP = h2h[b].w + h2h[b].l + h2h[b].t;
-    const aPct = aGP > 0 ? (h2h[a].w + 0.5*h2h[a].t) / aGP : null;
-    const bPct = bGP > 0 ? (h2h[b].w + 0.5*h2h[b].t) / bGP : null;
-    if(aPct !== null && bPct !== null && aPct !== bPct) return bPct - aPct;
-    if(table[a].pf !== table[b].pf) return table[b].pf - table[a].pf;
-    const diffA = table[a].pf - table[a].pa, diffB = table[b].pf - table[b].pa;
-    if(diffA !== diffB) return diffB - diffA;
-    return 0;
+  const gp = {};
+  group.forEach(id=>{ gp[id] = h2h[id].w + h2h[id].l + h2h[id].t; });
+  // Head-to-head only decides THIS round of the tie if every team currently in the
+  // group has played every other member the same number of times -- partial coverage
+  // (e.g. one team hasn't faced the others yet) would make pairwise comparisons
+  // contradict each other depending on which pair gets compared. If coverage isn't
+  // equal across the whole group, skip head-to-head and fall to PF/DIFF instead.
+  const useH2H = gp[group[0]] > 0 && group.every(id=> gp[id] === gp[group[0]]);
+
+  if(useH2H){
+    const pctOf = id=> (h2h[id].w + 0.5*h2h[id].t) / gp[id];
+    // Anyone who separates by head-to-head percentage claims their spot. Anyone still
+    // tied forms a smaller cluster -- restart the WHOLE process (re-checking head-to-
+    // head eligibility fresh) for just that remainder, since removing the separated
+    // teams can change whether the rest have played each other symmetrically.
+    return clusterByKey(group, pctOf).flatMap(cluster=>
+      cluster.length === 1 ? cluster : tiebreakGroup(cluster, games, table)
+    );
+  }
+
+  // Not everyone here has played each other equally -- fall to season PF, then DIFF.
+  return clusterByKey(group, id=> table[id].pf).flatMap(pfCluster=>{
+    if(pfCluster.length === 1) return pfCluster;
+    return clusterByKey(pfCluster, id=> table[id].pf - table[id].pa).flatMap(diffCluster=>
+      // Still tied even on PF and DIFF -- restart fully for this remainder too.
+      diffCluster.length === 1 ? diffCluster : tiebreakGroup(diffCluster, games, table)
+    );
   });
 }
 
