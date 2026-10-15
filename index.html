@@ -134,6 +134,13 @@
   .card table td, .card table th{ padding:.45rem .7rem; }
   .num{ text-align:right; font-variant-numeric:tabular-nums; }
   #statsTable .num{ text-align:center; }
+  .tf-card{ max-width:680px; margin:0 auto 1.6rem; padding:1rem 1.1rem; }
+  .tf-card h3{ margin:0 0 .3rem; }
+  .tf-row{ margin:.6rem 0; }
+  .tf-row label{ display:block; font-size:.8rem; color:var(--ink-soft); }
+  .tf-row select, .tf-row textarea{ display:block; width:100%; margin-top:.25rem; padding:.45rem .5rem; border:1px solid var(--line); border-radius:4px; font:inherit; font-size:.9rem; background:#fff; color:var(--ink); box-sizing:border-box; }
+  .tf-actions{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-top:.7rem; }
+  .tf-actions a.btn{ text-decoration:none; display:inline-block; }
   .stats-team-col{ width:34px; padding-left:.3rem; padding-right:.2rem; }
   #statsTable .te-row{ font-weight:700; }
   .stats-subsection-divider td{ background:var(--chalk-2); text-align:center; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:.35rem; border-top:2px solid var(--line); border-bottom:2px solid var(--line); }
@@ -554,6 +561,18 @@
   </section>
 
   <section class="panel" id="panel-tradesim">
+    <div class="card tf-card" id="tradeFinderCard">
+      <h3>AI Trade Finder</h3>
+      <p class="hint">Pick your team and tap the button. The site builds everything Claude needs (all 12 rosters, this season's scores, and the research instructions) and copies it. Paste it into a new Claude chat with web search turned on and send. You get back a finished trade report.</p>
+      <div class="tf-row"><label>My team<select id="tfTeam"></select></label></div>
+      <div class="tf-row"><label>Anything else (optional)<textarea id="tfExtra" rows="2" placeholder="Example: I need a RB. I won't trade Derrick Henry."></textarea></label></div>
+      <div class="tf-actions">
+        <button class="btn btn-primary" id="tfCopyBtn">Copy trade finder prompt</button>
+        <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude</a>
+        <button class="btn small" id="tfDownloadBtn">Download as file instead</button>
+      </div>
+      <p class="hint" id="tfStatus" style="margin-top:.6rem;"></p>
+    </div>
     <p class="hint">Uses the current season's rosters (<span id="tradeSeasonLabel"></span>). Pick two teams, check off who's moving, then get an instant read based on season points-per-game and roster needs — no AI, no waiting. Values are discounted for players who wouldn't crack your starting lineup, based on the starting lineup set below.</p>
     <div class="digest-add-row" id="lineupSettingsRow" style="display:none;">
       <button class="btn small" id="editLineupBtn">Edit starting lineup</button>
@@ -702,7 +721,9 @@ async function saveData(){
 
 function exportFullBackup(){
   const stamp = new Date().toISOString().slice(0, 10);
-  downloadTextFile(JSON.stringify(data, null, 2), `srffl-hub-backup-${stamp}.json`, 'application/json');
+  // The edit PIN must never end up in a file that anyone can download and open
+  const { pin: _omittedPin, ...safeData } = data;
+  downloadTextFile(JSON.stringify(safeData, null, 2), `srffl-hub-backup-${stamp}.json`, 'application/json');
   toast('Backup downloaded.');
 }
 
@@ -720,7 +741,10 @@ async function importFullBackup(file){
     return;
   }
   if(!confirm('This will REPLACE ALL current data — rosters, scores, stats, everything — with this backup file. This cannot be undone. Continue?')) return;
+  const keepPin = data.pin;
   data = parsed;
+  // A restore should never change the edit PIN: keep the current one if there is one
+  if(keepPin !== undefined && keepPin !== null) data.pin = keepPin;
   applyDataDefaults();
   await saveData();
   refreshAllPanels();
@@ -2249,6 +2273,12 @@ document.getElementById('addTxnBtn').addEventListener('click', ()=>{
 let _seasonStatsCache = {};
 function invalidateSeasonStatsCache(){ _seasonStatsCache = {}; _gameHistoryCache = {}; }
 
+// A "benched, no stats entered, 0 points" row is a placeholder (also what a bye week or a
+// DNP looks like) -- it is NOT a real 0-point game, so it must not drag a player's PPG down.
+function isPlaceholderEntry(entry){
+  return entry && entry.started === false && (!entry.raw || Object.keys(entry.raw).length === 0) && !(Number(entry.points) || 0);
+}
+
 function computeSeasonStats(year){
   if(_seasonStatsCache[year]) return _seasonStatsCache[year];
   const result = {};
@@ -2259,7 +2289,7 @@ function computeSeasonStats(year){
       Object.keys(playerMap).forEach(pKey=>{
         const entry = playerMap[pKey];
         if(!entry) return;
-        if(!result[pKey]) result[pKey] = { name: entry.name, pos: entry.pos, raw: {}, points: 0, games: 0 };
+        if(!result[pKey]) result[pKey] = { name: entry.name, pos: entry.pos, raw: {}, points: 0, games: 0, ppgGames: 0 };
         const acc = result[pKey];
         acc.pos = entry.pos;
         Object.keys(entry.raw || {}).forEach(k=>{
@@ -2267,6 +2297,7 @@ function computeSeasonStats(year){
         });
         acc.points += Number(entry.points) || 0;
         acc.games += 1;
+        if(!isPlaceholderEntry(entry)) acc.ppgGames += 1;
       });
     });
   });
@@ -2276,13 +2307,14 @@ function computeSeasonStats(year){
     Object.keys(baselinesByYear[ownerId] || {}).forEach(pKey=>{
       const b = baselinesByYear[ownerId][pKey];
       if(!b) return;
-      if(!result[pKey]) result[pKey] = { name: b.name, pos: b.pos, raw: {}, points: 0, games: 0 };
+      if(!result[pKey]) result[pKey] = { name: b.name, pos: b.pos, raw: {}, points: 0, games: 0, ppgGames: 0 };
       const acc = result[pKey];
       Object.keys(b.raw || {}).forEach(k=>{
         acc.raw[k] = (acc.raw[k] || 0) + (Number(b.raw[k]) || 0);
       });
       acc.points += Number(b.points) || 0;
       acc.games += Number(b.gp) || 0;
+      acc.ppgGames += Number(b.gp) || 0;
     });
   });
   _seasonStatsCache[year] = result;
@@ -2296,9 +2328,9 @@ function getPlayerStat(year, name){
 
 function playerStatLine(p){
   const stat = getPlayerStat(currentSeason, p.name);
-  if(stat && stat.games > 0){
-    const ppg = (stat.points / stat.games).toFixed(2);
-    return `${p.name} (${p.pos}, ${stat.points.toFixed(2)} pts over ${stat.games} games this season, ${ppg} ppg)`;
+  if(stat && stat.ppgGames > 0){
+    const ppg = (stat.points / stat.ppgGames).toFixed(2);
+    return `${p.name} (${p.pos}, ${stat.points.toFixed(2)} pts over ${stat.ppgGames} games this season, ${ppg} ppg)`;
   }
   return `${p.name} (${p.pos}, no season stats logged yet)`;
 }
@@ -3395,6 +3427,162 @@ document.getElementById('editLineupBtn').addEventListener('click', ()=>{
   else{ renderLineupForm(); box.style.display = 'block'; }
 });
 
+// ---------- AI Trade Finder: one copy-ready prompt (instructions + live league data) ----------
+const TF_INSTRUCTIONS = `=== OUR SCORING (for players NOT listed above, since the web only gives raw NFL stats) ===
+- Passing: 0.05/yd, +1 for 300-399 yds, +5 for 400+ (replaces the +1), 6/TD, -2/INT, 2/2pt.
+- Rushing: 0.1/yd, +5 for 100-199 yds, +10 for 200+, 6/TD, 2/2pt.
+- Receiving: 0.1/yd, +3 for 100-199 yds, +5 for 200+, 0.5/reception, 6/TD, 2/2pt.
+- Fumble lost: -2.
+- Kicker: PAT +1, missed PAT -1, FG 0-39 +3, 40-49 +4, 50-59 +7, 60+ +15, missed FG 0-39 -1, missed 40-49 -0.5.
+- Defense: sack 1, INT 2, fumble recovery 1, forced fumble 1, safety 3, def/ST TD 6, blocked kick 2, 2pt return 2, 1pt safety 1. Points allowed: 0 = +20, 1-6 = +15, 7-13 = +10, 14-17 = +7.5, 18-21 = +5, 22-27 = +2, 28-34 = -5, 35-45 = -10, 46+ = -20.
+
+=== BUILD A REALISTIC VALUE FOR EVERY ROSTERED PLAYER ===
+- Season PPG and last-3-games PPG, using only real games (see the "-" rule above).
+- Projected value = half season PPG, half last-3 PPG. With under 3 real games, use season PPG only. If a player has under 4 real games AND is scoring above his position's average, pull him partway back toward that average (hot starts on tiny samples regress). Never lift a low scorer up.
+- Compute each team's BEST starting lineup with an EXACT optimization (try every legal assignment, respecting flex rules). Do NOT use a greedy fill: it misassigns flex slots and overstates one side's gain.
+- Run every trade through three value models (season-only, last-3-only, blended) and report all three. A trade is only "robust" if both teams gain, or at worst break even, under all of them.
+
+=== RESEARCH (required) ===
+Use web search for every player in a trade you would recommend and every free agent: injury status and return timeline, role (snap share, targets, carries), upcoming matchups, whether recent scoring is sustainable, and bye weeks. Check byes for my team's players and for any acquired player; flag a week where several of my starters share a bye, and flag any bye THIS week. Do not name your sources and do not cite websites: present what you learned as your own analysis. Only include information you actually found. If you could not verify something, say so in a short "not verified" note.
+
+FREE AGENTS: anyone whose exact name is not on any of the 12 rosters is available. Search for the best available players, including a kicker and a defense for any bye week. Check each is unrostered. List them with their role and matchup. Their stats come from the web, so say clearly that they are not in our scoring. Tell me to confirm availability on ESPN. If a free agent solves a need, say so instead of suggesting a trade.
+
+=== FIND TRADES ===
+Test trades between my team and each of the other 11. Check 1-for-1, 2-for-1, 1-for-2 and 2-for-2 first; larger trades only if the fit is exceptional. Judge in this order:
+1. My lineup total must rise, and the OTHER team's must rise (or at worst break even) under all three value models. If the other side loses, they will not accept, so do not recommend it.
+2. Real need and real surplus: a need is a starting slot with no one good enough, not a low headcount. Move surplus into need. A player who would not start for his new team is only worth bench value to them.
+3. Recent form and sustainability (hot streak on a thin sample? injury-shortened game?). Do not count a bye or injury week as a bad game.
+4. Byes, schedule, injury risk, and the playoffs.
+5. Do not empty a position unless the return clearly justifies it.
+6. Give the other owner a reason to say yes. Offer a safer fallback version when the best version is lopsided.
+7. If I own a spare at a position (like a second QB) look for the team that needs it, and for what they have that I need.
+
+=== OUTPUT: A FINISHED, POLISHED DOCUMENT ===
+Deliver the report as a finished document FILE: a Word (.docx) file if you can create one, otherwise a PDF. Do NOT paste the report into the chat. In the chat, reply with only two or three sentences: the bottom line and where the file is. Style it like a professional report: title and date at the top, real headings, tables with a header row, changed slots in bold, consistent fonts, short plain sentences, no source names. If you truly cannot create a file, produce one clean, fully formatted markdown document and say so. Sections:
+1. Bottom line: one or two sentences with my lineup total before and after the recommended trades.
+2. My lineup today: a table of slot, player, projected points, and total. Weak spots, spare pieces, this week's bye problems, and any injury I should check.
+3. Each recommended trade (up to 3-4), in order. For each: a one-line ask, then a table with columns Slot | My lineup now | My lineup after | Their lineup now | Their lineup after, with player and projected points in each cell and a TOTAL row. Mark changed slots in bold. Then why they would say yes, how robust it is (the three value models), a safer fallback, and risks. Later trades should assume earlier ones happened.
+4. All trades together: a small table of my lineup total after each step, plus a softer-path total.
+5. Other deals checked: a table (team, deal, my change, their change, why it falls short).
+6. Free agents to add: a table (player, position, why now), plus drop candidates.
+7. Every team, even if no good trade exists: a table with the team's record and lineup total, biggest needs, players they have that could help me, and what I have that could help them (with the size of their gain and my cost). Finish with one sentence naming my best partners and who to try next.
+8. Notes: how the points are calculated, that the data is as of the date above, and anything not verified.
+Never force a bad trade. If nothing good exists, say so and still give sections 2, 6 and 7.`;
+
+function tfNum(n){ return (Number(n) || 0).toFixed(2).replace(/\.?0+$/, ''); }
+
+function renderTradeFinderSelect(){
+  const sel = document.getElementById('tfTeam');
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '';
+  data.owners.forEach(o=>{
+    const opt = document.createElement('option');
+    opt.value = o.id; opt.textContent = o.team || o.name;
+    sel.appendChild(opt);
+  });
+  if(data.owners.some(o=>o.id === prev)) sel.value = prev;
+}
+
+function buildTradeFinderPrompt(ownerId, extra){
+  const year = currentSeason;
+  const me = data.owners.find(o=>o.id === ownerId);
+  const myTeam = me ? (me.team || me.name) : '';
+  const games = (data.schedule[year] || []).filter(isPlayed);
+  const weeks = [...new Set(games.map(g=>g.week))].sort((a,b)=> a - b);
+
+  // Real games only: placeholder rows (benched with no stats entered, byes, injuries) are left out
+  const pts = {};
+  games.forEach(g=>{
+    Object.values(g.stats || {}).forEach(pm=>{
+      Object.keys(pm).forEach(k=>{
+        const e = pm[k];
+        if(!e || isPlaceholderEntry(e)) return;
+        (pts[k] = pts[k] || {})[g.week] = Number(e.points) || 0;
+      });
+    });
+  });
+
+  const standings = orderedStandings(year);
+  const standingsText = standings.map((r,i)=>{
+    const rec = r.rec;
+    return `${i+1}. ${r.owner.team || r.owner.name}: ${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}, PF ${tfNum(rec.pf)}, PA ${tfNum(rec.pa)}`;
+  }).join('\n');
+
+  const ordered = [...standings.map(r=>r.owner)];
+  ordered.sort((a,b)=> (a.id === ownerId ? -1 : 0) - (b.id === ownerId ? -1 : 0));
+  const rosterText = ordered.map(o=>{
+    const rec = (standings.find(r=>r.owner.id === o.id) || {}).rec;
+    const head = `## ${o.team || o.name}${o.id === ownerId ? ' (MY TEAM)' : ''}${rec ? ` - ${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}` : ''}`;
+    const lines = sortByPositionThenName((data.rosters[year] && data.rosters[year][o.id]) || []).map(p=>{
+      const mine = pts[statKey(p.name)] || {};
+      return `${p.name}, ${normalizePos(p.pos)}: ` + weeks.map(w=> mine[w] !== undefined ? tfNum(mine[w]) : '-').join(' | ');
+    });
+    return head + '\n' + lines.join('\n');
+  }).join('\n\n');
+
+  const slotsText = ensureLineupSlots().map(s=> s.join('/')).join(', ');
+  const dateStr = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  const extraText = (extra || '').trim() || 'nothing';
+
+  return `You are my fantasy football trade analyst. Build me a trade report for MY team using the league data below plus current research.
+
+MY TEAM: ${myTeam}
+ANYTHING ELSE: ${extraText}
+
+=== LEAGUE DATA (generated ${dateStr} from our league site, season ${year}) ===
+League: SRFFL, 12 teams, redraft, ESPN league. Starting lineup slots: ${slotsText} (flex slots take either listed position).
+Weeks played so far: ${weeks.join(', ')}.
+
+Standings (record, points for, points against):
+${standingsText}
+
+Rosters and weekly points. Each line is: player, position: points for ${weeks.map(w=>'Week ' + w).join(', ')} in that order. Points are already in OUR custom scoring, so use them as given. A "-" means no real game that week (benched with no stats entered, on a bye, or injured). Never count a "-" as zero points or as a game played.
+
+${rosterText}
+
+=== DATA RULES ===
+- Match player names EXACTLY as written above (ignore only upper/lower case). Never decide that two different spellings are the same player. If a name you expect is not listed, say so instead of guessing.
+- This is a snapshot from when I tapped the button. Anyone added or dropped after that is not reflected.
+
+${TF_INSTRUCTIONS}
+`;
+}
+
+async function tfCopyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }catch(e){}
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+
+document.getElementById('tfCopyBtn').addEventListener('click', async ()=>{
+  const status = document.getElementById('tfStatus');
+  const ownerId = document.getElementById('tfTeam').value;
+  if(!ownerId){ status.textContent = 'Add teams first.'; return; }
+  const text = buildTradeFinderPrompt(ownerId, document.getElementById('tfExtra').value);
+  const kb = Math.round(text.length / 1024);
+  const ok = await tfCopyText(text);
+  status.textContent = ok
+    ? `Copied (${kb} KB). Now open a new Claude chat with web search on, paste it, and send.`
+    : 'Could not copy automatically on this device. Tap "Download as file instead" and attach the file to a new Claude chat.';
+});
+
+document.getElementById('tfDownloadBtn').addEventListener('click', ()=>{
+  const status = document.getElementById('tfStatus');
+  const sel = document.getElementById('tfTeam');
+  if(!sel.value){ status.textContent = 'Add teams first.'; return; }
+  const text = buildTradeFinderPrompt(sel.value, document.getElementById('tfExtra').value);
+  const slug = (sel.options[sel.selectedIndex].textContent || 'team').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  downloadTextFile(text, `srffl-trade-finder-${slug}.txt`, 'text/plain');
+  status.textContent = 'Downloaded. Attach it to a new Claude chat (web search on) and send: "Follow the instructions in the attached file."';
+});
+
 function renderTradeTeamSelects(){
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
@@ -3413,6 +3601,7 @@ function renderTradeTeamSelects(){
     bSel.selectedIndex = (aSel.selectedIndex + 1) % data.owners.length;
   }
   document.getElementById('tradeSeasonLabel').textContent = currentSeason;
+  renderTradeFinderSelect();
 }
 
 function renderTradeBuilder(){
@@ -3452,7 +3641,7 @@ function renderTradeBuilder(){
 
 function playerValue(p){
   const stat = getPlayerStat(currentSeason, p.name);
-  if(stat && stat.games > 0) return stat.points / stat.games;
+  if(stat && stat.ppgGames > 0) return stat.points / stat.ppgGames;
   return null;
 }
 
@@ -3649,7 +3838,7 @@ function getPlayerGameHistory(year, playerName){
   (data.schedule[year] || []).forEach(g=>{
     Object.values(g.stats || {}).forEach(playerMap=>{
       const entry = playerMap[key];
-      if(entry) history.push({ week: g.week, points: Number(entry.points) || 0 });
+      if(entry && !isPlaceholderEntry(entry)) history.push({ week: g.week, points: Number(entry.points) || 0 });
     });
   });
   history.sort((a,b)=> a.week - b.week);
