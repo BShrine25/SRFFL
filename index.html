@@ -563,7 +563,7 @@
   <section class="panel" id="panel-tradesim">
     <div class="card tf-card" id="tradeFinderCard">
       <h3>AI Trade Finder</h3>
-      <p class="hint">Pick your team and tap the button. The site builds everything Claude needs (all 12 rosters, this season's scores, and the research instructions) and copies it. Paste it into a new Claude chat with web search turned on and send. You get back a finished trade report.</p>
+      <p class="hint">Pick your team and tap the button. The site builds everything Claude needs (all 12 rosters, this season's scores, the schedule and playoff rules, and the research instructions) and copies it. Paste it into a new Claude chat with web search turned on and send. You get back a finished trade report.</p>
       <div class="tf-row"><label>My team<select id="tfTeam"></select></label></div>
       <div class="tf-row"><label>Anything else (optional)<textarea id="tfExtra" rows="2" placeholder="Example: I need a RB. I won't trade Derrick Henry."></textarea></label></div>
       <div class="tf-actions">
@@ -2545,7 +2545,7 @@ function clusterByKey(items, keyFn){
   return Object.keys(buckets).sort((a,b)=> Number(b) - Number(a)).map(k=> buckets[k]);
 }
 
-function tiebreakGroup(group, games, table){
+function tiebreakGroup(group, games, table, skipH2H){
   if(group.length <= 1) return group;
 
   const h2h = {};
@@ -2559,31 +2559,31 @@ function tiebreakGroup(group, games, table){
   });
   const gp = {};
   group.forEach(id=>{ gp[id] = h2h[id].w + h2h[id].l + h2h[id].t; });
-  // Head-to-head only decides THIS round of the tie if every team currently in the
-  // group has played every other member the same number of times -- partial coverage
-  // (e.g. one team hasn't faced the others yet) would make pairwise comparisons
-  // contradict each other depending on which pair gets compared. If coverage isn't
-  // equal across the whole group, skip head-to-head and fall to PF/DIFF instead.
-  const useH2H = gp[group[0]] > 0 && group.every(id=> gp[id] === gp[group[0]]);
+  // Head-to-head only decides THIS round of the tie if every team currently in the group has played
+  // every other member the same number of times. If coverage isn't equal (or head-to-head already
+  // failed to separate this exact group), skip it and fall to season PF, then DIFF.
+  const useH2H = !skipH2H && gp[group[0]] > 0 && group.every(id=> gp[id] === gp[group[0]]);
 
   if(useH2H){
     const pctOf = id=> (h2h[id].w + 0.5*h2h[id].t) / gp[id];
-    // Anyone who separates by head-to-head percentage claims their spot. Anyone still
-    // tied forms a smaller cluster -- restart the WHOLE process (re-checking head-to-
-    // head eligibility fresh) for just that remainder, since removing the separated
-    // teams can change whether the rest have played each other symmetrically.
-    return clusterByKey(group, pctOf).flatMap(cluster=>
-      cluster.length === 1 ? cluster : tiebreakGroup(cluster, games, table)
-    );
+    // Anyone who separates claims their spot. Anyone still tied forms a smaller cluster, and the WHOLE
+    // process restarts for just that remainder. If head-to-head did not separate anyone at all (for
+    // example a 1-1 split between two teams), do NOT repeat it on the same group: go on to PF/DIFF.
+    return clusterByKey(group, pctOf).flatMap(cluster=>{
+      if(cluster.length === 1) return cluster;
+      return tiebreakGroup(cluster, games, table, cluster.length === group.length);
+    });
   }
 
-  // Not everyone here has played each other equally -- fall to season PF, then DIFF.
+  // Fall to season PF, then DIFF.
   return clusterByKey(group, id=> table[id].pf).flatMap(pfCluster=>{
     if(pfCluster.length === 1) return pfCluster;
-    return clusterByKey(pfCluster, id=> table[id].pf - table[id].pa).flatMap(diffCluster=>
-      // Still tied even on PF and DIFF -- restart fully for this remainder too.
-      diffCluster.length === 1 ? diffCluster : tiebreakGroup(diffCluster, games, table)
-    );
+    return clusterByKey(pfCluster, id=> table[id].pf - table[id].pa).flatMap(diffCluster=>{
+      if(diffCluster.length === 1) return diffCluster;
+      // Identical on PF and DIFF too and nothing separated them: nothing left to try, keep the order.
+      if(diffCluster.length === group.length) return diffCluster;
+      return tiebreakGroup(diffCluster, games, table);
+    });
   });
 }
 
@@ -3428,7 +3428,7 @@ document.getElementById('editLineupBtn').addEventListener('click', ()=>{
 });
 
 // ---------- AI Trade Finder: one copy-ready prompt (instructions + live league data) ----------
-const TF_INSTRUCTIONS = `=== OUR SCORING (for players NOT listed above, since the web only gives raw NFL stats) ===
+const TF_INSTRUCTIONS = `=== OUR SCORING (use it for any real NFL stat line you fill in or look up) ===
 - Passing: 0.05/yd, +1 for 300-399 yds, +5 for 400+ (replaces the +1), 6/TD, -2/INT, 2/2pt.
 - Rushing: 0.1/yd, +5 for 100-199 yds, +10 for 200+, 6/TD, 2/2pt.
 - Receiving: 0.1/yd, +3 for 100-199 yds, +5 for 200+, 0.5/reception, 6/TD, 2/2pt.
@@ -3436,38 +3436,61 @@ const TF_INSTRUCTIONS = `=== OUR SCORING (for players NOT listed above, since th
 - Kicker: PAT +1, missed PAT -1, FG 0-39 +3, 40-49 +4, 50-59 +7, 60+ +15, missed FG 0-39 -1, missed 40-49 -0.5.
 - Defense: sack 1, INT 2, fumble recovery 1, forced fumble 1, safety 3, def/ST TD 6, blocked kick 2, 2pt return 2, 1pt safety 1. Points allowed: 0 = +20, 1-6 = +15, 7-13 = +10, 14-17 = +7.5, 18-21 = +5, 22-27 = +2, 28-34 = -5, 35-45 = -10, 46+ = -20.
 
-=== BUILD A REALISTIC VALUE FOR EVERY ROSTERED PLAYER ===
-- Season PPG and last-3-games PPG, using only real games (see the "-" rule above).
+=== FILL THE GAPS IN THE DATA (required) ===
+FA and NE weeks are missing information, not zeros. Never count them as 0 points, and never count them as games played unless you fill them in. For every player who matters (anyone in a trade you consider, every starter on MY team, the top lineup slots of any team you would trade with, and every free agent you recommend), look up his real NFL game log for each FA or NE week and sort the week into one of these:
+- Bye week, or inactive / out injured: leave the week out.
+- Played a full game: fill it in with his real stat line converted to OUR scoring, and count it like any other game. This is how his free-agent weeks get counted.
+- Left the game early with an injury: keep the points but flag the week as injury-shortened, and do not treat it as his normal level.
+- First one or two games back from an injury (limited snaps, or he struggled before finding form): flag it and count it at about half weight, unless his snaps and usage were already back to normal.
+Also scan the numbers already shown for the same problems (for example a low score from a game he left early). Game-log pages often hide current-season rows, so if one source fails, try another (a box score, a game recap, or the player's weekly stats page). If you can only find season totals, or cannot find the game at all, say so and leave the week out rather than guessing.
+
+=== ADJUST FOR OPPONENTS AND THE SCHEDULE (required) ===
+Use the real NFL schedule (opponents for Weeks 15 to 17 are already set even where game times are still TBD). For each player who matters, list his opponent for every game counted so far and for every remaining week through Week 17, plus his bye week. Rate each opponent's defense against his position (points or yards allowed to the position, or its rank). Then:
+- Compare each counted game with what a player in his role typically scores against that defense. Show his matchup-adjusted PPG next to his raw PPG. Say plainly when a hot streak came against weak defenses (discount it) or a slump came against strong ones (do not punish it).
+- Project his remaining games, and especially Weeks 15 to 17, with the same adjustment.
+
+=== BUILD A REALISTIC VALUE FOR EVERY PLAYER THAT MATTERS ===
+- Season PPG and last-3-games PPG over REAL games only: the numbers shown, plus the weeks you filled in, with the injury flags and the matchup adjustment applied.
 - Projected value = half season PPG, half last-3 PPG. With under 3 real games, use season PPG only. If a player has under 4 real games AND is scoring above his position's average, pull him partway back toward that average (hot starts on tiny samples regress). Never lift a low scorer up.
 - Compute each team's BEST starting lineup with an EXACT optimization (try every legal assignment, respecting flex rules). Do NOT use a greedy fill: it misassigns flex slots and overstates one side's gain.
 - Run every trade through three value models (season-only, last-3-only, blended) and report all three. A trade is only "robust" if both teams gain, or at worst break even, under all of them.
 
 === RESEARCH (required) ===
-Use web search for every player in a trade you would recommend and every free agent: injury status and return timeline, role (snap share, targets, carries), upcoming matchups, whether recent scoring is sustainable, and bye weeks. Check byes for my team's players and for any acquired player; flag a week where several of my starters share a bye, and flag any bye THIS week. Do not name your sources and do not cite websites: present what you learned as your own analysis. Only include information you actually found. If you could not verify something, say so in a short "not verified" note.
+Use web search for every player in a trade you would recommend and every free agent: injury status and return timeline, role (snap share, targets, carries), whether recent scoring is sustainable, and news. Check byes for my team's players and for any acquired player; flag a week where several of my starters share a bye, and flag any bye THIS week. Do not name your sources and do not cite websites: present what you learned as your own analysis. Only include information you actually found. If you could not verify something, say so in a short "not verified" note.
 
-FREE AGENTS: anyone whose exact name is not on any of the 12 rosters is available. Search for the best available players, including a kicker and a defense for any bye week. Check each is unrostered. List them with their role and matchup. Their stats come from the web, so say clearly that they are not in our scoring. Tell me to confirm availability on ESPN. If a free agent solves a need, say so instead of suggesting a trade.
+FREE AGENTS: anyone whose exact name is not on any of the 12 rosters is available. Search for the best available players, including a kicker and a defense for any bye week. Check each is unrostered. List them with their role and matchup. Their stats come from the web, so say clearly that they are not in our scoring unless you converted them. Tell me to confirm availability on ESPN. If a free agent solves a need, say so instead of suggesting a trade.
+
+=== READ MY SITUATION AND CHOOSE THE ANGLE ===
+From the standings, my record and rank, the games left, the elimination list and the calendar above, decide which situation MY TEAM is in and lead with the matching angle. If I wrote something specific under ANYTHING ELSE, do that first. Otherwise always include a short "Playoff outlook and how to improve" section, whatever the situation.
+- Trades closed, or MY TEAM eliminated: I cannot trade. Say so plainly and give lineup and free-agent advice only.
+- Contender (strong lineup, comfortably in the top 8, or heading for a top seed): besides normal trades, always offer ideas that raise my Weeks 15-17 lineup. For example: sell a star who faces a brutal playoff slate for slightly lesser players with soft playoff matchups; add depth where one injury would hurt; secure the best matchups for the playoff weeks. Mention these even when I am coasting. Weigh the playoff weeks more as the season goes on.
+- On the bubble: balance winning now against the playoff weeks, and say which matters more right now.
+- Long shot (for example 2-4 or worse, a weak lineup, a real chance of missing the top 8): default to all-in tactics. Favor higher-variance moves and bigger shapes, such as trading my best player for three solid starters when that raises my weekly lineup total or fixes several weak slots, buying boom-or-bust upside, or consolidating. The other owner still has to say yes, so judge their side by need and perceived value, and it is acceptable for them to come out slightly ahead if my lineup rises meaningfully. Be honest about my odds.
+- No realistic path to the playoffs or a title: say so directly, then give the best fighting chance.
+You decide how hard to push each angle. Be direct.
 
 === FIND TRADES ===
-Test trades between my team and each of the other 11. Check 1-for-1, 2-for-1, 1-for-2 and 2-for-2 first; larger trades only if the fit is exceptional. Judge in this order:
-1. My lineup total must rise, and the OTHER team's must rise (or at worst break even) under all three value models. If the other side loses, they will not accept, so do not recommend it.
+Only suggest trades if trades are OPEN, only with teams that are NOT eliminated, and remember a trade only pays off for the weeks left. Test trades between my team and each of the other 11. Check 1-for-1, 2-for-1, 1-for-2 and 2-for-2 first; larger trades only if the fit is exceptional (for a long shot, bigger shapes are welcome). Judge in this order:
+1. My lineup total must rise, and the OTHER team's must rise (or at worst break even) under all three value models. If the other side loses, they will not accept, so do not recommend it. (Long-shot exception above.)
 2. Real need and real surplus: a need is a starting slot with no one good enough, not a low headcount. Move surplus into need. A player who would not start for his new team is only worth bench value to them.
 3. Recent form and sustainability (hot streak on a thin sample? injury-shortened game?). Do not count a bye or injury week as a bad game.
-4. Byes, schedule, injury risk, and the playoffs.
+4. Byes, schedule, injury risk, and the playoff weeks (15, 16, 17).
 5. Do not empty a position unless the return clearly justifies it.
 6. Give the other owner a reason to say yes. Offer a safer fallback version when the best version is lopsided.
 7. If I own a spare at a position (like a second QB) look for the team that needs it, and for what they have that I need.
 
 === OUTPUT: A FINISHED, POLISHED DOCUMENT ===
 Deliver the report as a finished document FILE: a Word (.docx) file if you can create one, otherwise a PDF. Do NOT paste the report into the chat. In the chat, reply with only two or three sentences: the bottom line and where the file is. Style it like a professional report: title and date at the top, real headings, tables with a header row, changed slots in bold, consistent fonts, short plain sentences, no source names. If you truly cannot create a file, produce one clean, fully formatted markdown document and say so. Sections:
-1. Bottom line: one or two sentences with my lineup total before and after the recommended trades.
+1. Bottom line: one or two sentences with my lineup total before and after the recommended trades, and where my team stands.
 2. My lineup today: a table of slot, player, projected points, and total. Weak spots, spare pieces, this week's bye problems, and any injury I should check.
-3. Each recommended trade (up to 3-4), in order. For each: a one-line ask, then a table with columns Slot | My lineup now | My lineup after | Their lineup now | Their lineup after, with player and projected points in each cell and a TOTAL row. Mark changed slots in bold. Then why they would say yes, how robust it is (the three value models), a safer fallback, and risks. Later trades should assume earlier ones happened.
-4. All trades together: a small table of my lineup total after each step, plus a softer-path total.
-5. Other deals checked: a table (team, deal, my change, their change, why it falls short).
-6. Free agents to add: a table (player, position, why now), plus drop candidates.
-7. Every team, even if no good trade exists: a table with the team's record and lineup total, biggest needs, players they have that could help me, and what I have that could help them (with the size of their gain and my cost). Finish with one sentence naming my best partners and who to try next.
-8. Notes: how the points are calculated, that the data is as of the date above, and anything not verified.
-Never force a bad trade. If nothing good exists, say so and still give sections 2, 6 and 7.`;
+3. Playoff outlook and how to improve: which situation I am in and why, then the ideas for that angle. Include a table of my key players with their opponent and matchup rating for Weeks 15, 16 and 17.
+4. Each recommended trade (up to 3-4), in order. For each: a one-line ask, then a table with columns Slot | My lineup now | My lineup after | Their lineup now | Their lineup after, with player and projected points in each cell and a TOTAL row. Mark changed slots in bold. Then why they would say yes, how robust it is (the three value models), a safer fallback, and risks. Later trades should assume earlier ones happened.
+5. All trades together: a small table of my lineup total after each step, plus a softer-path total.
+6. Other deals checked: a table (team, deal, my change, their change, why it falls short).
+7. Free agents to add: a table (player, position, why now), plus drop candidates.
+8. Every team, even if no good trade exists: a table with the team's record and lineup total, whether they can still trade, biggest needs, players they have that could help me, and what I have that could help them (with the size of their gain and my cost). Finish with one sentence naming my best partners and who to try next.
+9. Data fill-in and notes: which FA and NE weeks you filled in, which you left out and why, how the points are calculated, that the data is as of the date above, and anything not verified.
+Never force a bad trade. If trades are closed, my team is eliminated, or nothing good exists, say so and still give sections 2, 3, 7 and 8.`;
 
 function tfNum(n){ return (Number(n) || 0).toFixed(2).replace(/\.?0+$/, ''); }
 
@@ -3487,9 +3510,16 @@ function renderTradeFinderSelect(){
 function buildTradeFinderPrompt(ownerId, extra){
   const year = currentSeason;
   const me = data.owners.find(o=>o.id === ownerId);
-  const myTeam = me ? (me.team || me.name) : '';
-  const games = (data.schedule[year] || []).filter(isPlayed);
+  const teamName = (o)=> o.team || o.name;
+  const myTeam = me ? teamName(me) : '';
+  const allGames = data.schedule[year] || [];
+  const games = allGames.filter(isPlayed);
   const weeks = [...new Set(games.map(g=>g.week))].sort((a,b)=> a - b);
+  const maxWeek = weeks.length ? weeks[weeks.length - 1] : 0;
+  const nextWeek = maxWeek + 1;
+  const TRADE_DEADLINE = 13;
+  const tradesOpen = nextWeek <= TRADE_DEADLINE;
+  const weeksToTrade = tradesOpen ? (TRADE_DEADLINE - nextWeek + 1) : 0;
 
   // Real games only: placeholder rows (benched with no stats entered, byes, injuries) are left out
   const pts = {};
@@ -3503,20 +3533,51 @@ function buildTradeFinderPrompt(ownerId, extra){
     });
   });
 
+  // Who was on ANY league roster each week, so a free-agent week (FA) can be told apart from a
+  // week on a roster where nobody entered stats (NE: benched, bye, or injured)
+  const onRoster = {};
+  weeks.forEach(w=>{
+    const s = new Set();
+    data.owners.forEach(o=> computeRosterAsOfWeek(year, o.id, w).forEach(p=> s.add(statKey(p.name))));
+    onRoster[w] = s;
+  });
+
   const standings = orderedStandings(year);
-  const standingsText = standings.map((r,i)=>{
-    const rec = r.rec;
-    return `${i+1}. ${r.owner.team || r.owner.name}: ${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}, PF ${tfNum(rec.pf)}, PA ${tfNum(rec.pa)}`;
+  const recText = (rec)=> `${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}`;
+  const standingsText = standings.map((r,i)=>
+    `${i+1}. ${teamName(r.owner)}: ${recText(r.rec)}, PF ${tfNum(r.rec.pf)}, PA ${tfNum(r.rec.pa)}`
+  ).join('\n');
+
+  const eliminated = computeEliminations(year, maxWeek);
+  const elimText = eliminated.length ? eliminated.map(teamName).join(', ') : 'none';
+  const iAmOut = eliminated.some(o=> o.id === ownerId);
+
+  const upcoming = allGames.filter(g=> !isPlayed(g)).sort((a,b)=> a.week - b.week);
+  const nameById = {};
+  data.owners.forEach(o=> nameById[o.id] = teamName(o));
+  const oppsFor = (id)=> upcoming.filter(g=> g.homeId === id || g.awayId === id)
+    .map(g=> `W${g.week} ${nameById[g.homeId === id ? g.awayId : g.homeId]}`);
+  const scheduleText = data.owners.map(o=>{
+    const opps = oppsFor(o.id);
+    return `${teamName(o)}: ${opps.length ? opps.join(', ') : 'none left'}`;
   }).join('\n');
+
+  const myRow = standings.find(r=> r.owner.id === ownerId);
+  const myRank = myRow ? standings.indexOf(myRow) + 1 : '?';
+  const myLine = myRow
+    ? `My team: ${recText(myRow.rec)}, ranked ${myRank} of ${standings.length}, ${oppsFor(ownerId).length} regular-season games left.`
+    : '';
 
   const ordered = [...standings.map(r=>r.owner)];
   ordered.sort((a,b)=> (a.id === ownerId ? -1 : 0) - (b.id === ownerId ? -1 : 0));
   const rosterText = ordered.map(o=>{
-    const rec = (standings.find(r=>r.owner.id === o.id) || {}).rec;
-    const head = `## ${o.team || o.name}${o.id === ownerId ? ' (MY TEAM)' : ''}${rec ? ` - ${rec.wins}-${rec.losses}${rec.ties ? '-' + rec.ties : ''}` : ''}`;
+    const row = standings.find(r=>r.owner.id === o.id);
+    const head = `## ${teamName(o)}${o.id === ownerId ? ' (MY TEAM)' : ''}${row ? ' - ' + recText(row.rec) : ''}${eliminated.some(x=>x.id === o.id) ? ' - ELIMINATED' : ''}`;
     const lines = sortByPositionThenName((data.rosters[year] && data.rosters[year][o.id]) || []).map(p=>{
-      const mine = pts[statKey(p.name)] || {};
-      return `${p.name}, ${normalizePos(p.pos)}: ` + weeks.map(w=> mine[w] !== undefined ? tfNum(mine[w]) : '-').join(' | ');
+      const k = statKey(p.name);
+      const mine = pts[k] || {};
+      const cells = weeks.map(w=> mine[w] !== undefined ? tfNum(mine[w]) : (onRoster[w].has(k) ? 'NE' : 'FA'));
+      return `${p.name}, ${normalizePos(p.pos)}: ` + cells.join(' | ');
     });
     return head + '\n' + lines.join('\n');
   }).join('\n\n');
@@ -3524,6 +3585,9 @@ function buildTradeFinderPrompt(ownerId, extra){
   const slotsText = ensureLineupSlots().map(s=> s.join('/')).join(', ');
   const dateStr = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
   const extraText = (extra || '').trim() || 'nothing';
+  const tradeStatus = tradesOpen
+    ? `OPEN (${weeksToTrade} week${weeksToTrade === 1 ? '' : 's'} left to make trades: Weeks ${nextWeek} to ${TRADE_DEADLINE})`
+    : `CLOSED (the Week ${TRADE_DEADLINE} deadline has passed)`;
 
   return `You are my fantasy football trade analyst. Build me a trade report for MY team using the league data below plus current research.
 
@@ -3532,12 +3596,21 @@ ANYTHING ELSE: ${extraText}
 
 === LEAGUE DATA (generated ${dateStr} from our league site, season ${year}) ===
 League: SRFFL, 12 teams, redraft, ESPN league. Starting lineup slots: ${slotsText} (flex slots take either listed position).
-Weeks played so far: ${weeks.join(', ')}.
+Weeks played so far: ${weeks.join(', ')}. Next week to be played: Week ${nextWeek}.
+
+=== CALENDAR AND RULES ===
+- Regular season: Weeks 1 to 14. The top 8 teams make the fantasy playoffs: Week 15 quarterfinals (seeds 1v8, 4v5, 2v7, 3v6), Week 16 semifinals, Week 17 championship.
+- Trades are allowed through Week ${TRADE_DEADLINE}. Trading today is ${tradeStatus}.
+- A team that is eliminated from the playoffs cannot trade from the moment it is eliminated. Eliminated right now: ${elimText}. Never propose a trade with an eliminated team.${iAmOut ? ' MY TEAM IS ELIMINATED, so trades are off the table for me.' : ''}
+- ${myLine}
 
 Standings (record, points for, points against):
 ${standingsText}
 
-Rosters and weekly points. Each line is: player, position: points for ${weeks.map(w=>'Week ' + w).join(', ')} in that order. Points are already in OUR custom scoring, so use them as given. A "-" means no real game that week (benched with no stats entered, on a bye, or injured). Never count a "-" as zero points or as a game played.
+Remaining regular-season schedule (opponent by week):
+${scheduleText}
+
+Rosters and weekly points. Each line is: player, position: points for ${weeks.map(w=>'Week ' + w).join(', ')} in that order. A number is a real game in OUR custom scoring, so use it as given. FA means the player was not on any league roster that week (free agent, or not yet added), so we have no stats for him. NE means he was on a roster but nobody entered stats (benched, on a bye, or injured). FA and NE are MISSING information, not zeros: never count them as 0 points or as a game played unless you fill them in as instructed below.
 
 ${rosterText}
 
