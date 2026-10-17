@@ -400,6 +400,67 @@
     font-size:.82rem; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; z-index:50;
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Playoff Predictor */
+  .pred-wrap{ margin-top:2rem; }
+  .pred-sub{ font-size:1.05rem; margin:1.4rem 0 .5rem; color:var(--field); }
+  .pred-bar{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.2rem 0 .7rem; }
+  .pred-count{ font-size:.76rem; color:var(--ink-soft); }
+  .pred-final{ font-size:.78rem; color:var(--ink-soft); margin:.2rem 0 .6rem; }
+  .pw-chips{ display:flex; gap:.4rem; overflow-x:auto; padding-bottom:.4rem; margin-bottom:.6rem; -webkit-overflow-scrolling:touch; }
+  .pw-chip{ flex:0 0 auto; border:1px solid var(--line); background:#fff; border-radius:999px; padding:.35rem .8rem; font:inherit; font-size:.78rem; cursor:pointer; color:var(--ink); }
+  .pw-chip.on{ background:var(--field); color:#fff; border-color:var(--field); }
+  .pw-count{ margin-left:.35rem; font-size:.68rem; opacity:.7; }
+  .pg-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); margin-bottom:.6rem; overflow:hidden; }
+  .pg-card.open{ border-color:var(--mustard); box-shadow:0 0 0 1px var(--mustard); }
+  .pg-row{ display:flex; align-items:stretch; gap:.35rem; padding:.5rem .5rem .35rem; }
+  .pg-team{ flex:1 1 0; min-width:0; display:flex; align-items:center; gap:.45rem; padding:.5rem .5rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--chalk); cursor:pointer; text-align:left; font:inherit; color:var(--ink); }
+  .pg-team.win{ background:#E4F1DA; border-color:#5E9B3E; }
+  .pg-team.lose{ opacity:.5; }
+  .pg-info{ min-width:0; display:flex; flex-direction:column; line-height:1.2; }
+  .pg-name{ font-size:.8rem; font-weight:600; line-height:1.15; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .pg-meta{ font-size:.68rem; color:var(--ink-soft); }
+  .pg-vs{ align-self:center; font-size:.66rem; color:var(--ink-soft); }
+  .pg-prob{ display:flex; height:4px; margin:0 .5rem; border-radius:2px; overflow:hidden; }
+  .pg-prob span{ display:block; height:100%; }
+  .pg-hint{ display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.3rem .6rem .5rem; font-size:.68rem; color:var(--ink-soft); }
+  .pg-toggle{ border:0; background:none; font:inherit; font-size:.7rem; color:var(--ink); text-decoration:underline; cursor:pointer; padding:0; white-space:nowrap; }
+  .pg-compare{ border-top:1px solid var(--line); padding:.6rem; background:var(--chalk); }
+  .pc-cols{ display:grid; grid-template-columns:1fr 1fr; gap:.55rem; }
+  .pc-col{ min-width:0; }
+  .pc-head{ display:flex; align-items:center; gap:.4rem; margin-bottom:.3rem; }
+  .pc-team{ font-size:.78rem; font-weight:600; line-height:1.15; }
+  .pc-sub{ font-size:.66rem; color:var(--ink-soft); }
+  .pc-stats{ display:flex; flex-direction:column; gap:.05rem; font-size:.68rem; color:var(--ink-soft); margin-bottom:.4rem; }
+  .pc-stats b{ color:var(--ink); }
+  .pc-title{ font-size:.62rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin:.45rem 0 .15rem; }
+  .pc-line{ display:flex; gap:.25rem; align-items:baseline; font-size:.7rem; padding:.12rem 0; border-bottom:1px dotted var(--line); }
+  .pc-slot{ flex:0 0 2.1rem; font-size:.58rem; color:var(--ink-soft); }
+  .pc-pl{ flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pc-val{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .pc-line.bench{ opacity:.6; }
+  .pc-note{ font-size:.68rem; color:var(--ink-soft); margin:.55rem 0 0; }
+  .pred-table td, .pred-table th{ white-space:nowrap; padding:.5rem .35rem; font-size:.8rem; }
+  .pred-table th{ font-size:.58rem; }
+  .pred-table td:first-child, .pred-table th:first-child{ padding-left:.6rem; width:1.7rem; }
+  .pd-badge{ margin-left:.4rem; font-size:.58rem; text-transform:uppercase; letter-spacing:.04em; padding:.08rem .3rem; border-radius:3px; }
+  .pd-badge.in{ background:#E4F1DA; color:#2f6a15; }
+  .pd-badge.out{ background:#F3DEDA; color:var(--red); }
+  .pd-focus td{ background:#FFF4D1; }
+  #predFocus{ width:100%; max-width:380px; padding:.45rem .5rem; border:1px solid var(--line); border-radius:4px; font:inherit; font-size:.9rem; margin:.2rem 0 .7rem; background:#fff; color:var(--ink); }
+  .pb-round{ margin-bottom:.9rem; }
+  .pb-rlabel{ font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin-bottom:.35rem; }
+  .pb-match{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.4rem .5rem; margin-bottom:.45rem; }
+  .pb-match.tbd{ opacity:.6; }
+  .pb-title{ font-size:.64rem; color:var(--ink-soft); margin-bottom:.25rem; }
+  .pb-tbd{ font-size:.75rem; color:var(--ink-soft); padding:.3rem 0; }
+  .pb-team{ width:100%; display:flex; align-items:center; gap:.45rem; padding:.4rem .5rem; margin-bottom:.25rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--chalk); font:inherit; color:var(--ink); cursor:pointer; text-align:left; }
+  .pb-team.win{ background:#E4F1DA; border-color:#5E9B3E; }
+  .pb-team.lose{ opacity:.5; }
+  .pb-name{ flex:1; min-width:0; font-size:.8rem; line-height:1.15; }
+  .pb-p{ font-size:.7rem; color:var(--ink-soft); }
+  .pb-hfa{ font-size:.64rem; color:var(--ink-soft); }
+  .pb-champ{ display:flex; align-items:center; gap:.5rem; padding:.6rem .7rem; background:var(--field); color:#fff; border-radius:var(--radius); font-size:.9rem; }
 </style>
 </head>
 <body style="background:#F5F1E4; color:#18170F; min-height:100vh;">
@@ -493,6 +554,7 @@
     <h2 class="section-title" style="margin-top:1.4rem;">Playoff Picture</h2>
     <div id="standingsBracket"></div>
     <div id="standingsScenarios"></div>
+    <div id="predictorRoot" class="pred-wrap"></div>
   </section>
 
   <section class="panel" id="panel-stats">
@@ -2615,6 +2677,7 @@ function renderSeasonStandings(){
     body.innerHTML = `<tr><td style="color:var(--ink-soft); font-size:.85rem;">Add teams in the Rosters tab first.</td></tr>`;
     document.getElementById('standingsBracket').innerHTML = '';
     document.getElementById('standingsScenarios').innerHTML = '';
+    const prEmpty = document.getElementById('predictorRoot'); if(prEmpty) prEmpty.innerHTML = '';
     return;
   }
 
@@ -2658,6 +2721,7 @@ function renderSeasonStandings(){
     <h2 class="section-title" style="margin-top:1.4rem;">Possible Eliminations</h2>
     <p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>
   `;
+  renderPredictor(true);
 }
 
 function teamLogoHTML(ownerId, year){
@@ -2710,6 +2774,500 @@ function renderPlayoffBracket(container, year){
     <p class="hint" style="text-align:center; margin-top:.8rem;">Seeded from current standings — updates automatically as scores come in. Semifinal and championship results aren't tracked yet, so those slots stay TBD.</p>
   `;
 }
+
+/* ---------- Playoff Predictor ---------- */
+// Click a winner for every remaining game and the standings, seeds and playoff odds update.
+// Uses only the data already in the site: results so far, rosters and player stats.
+const PRED = { picks:{}, po:{}, week:null, open:null, focus:'', loadedFor:null, model:null, sim:null, simKey:'', focusSim:null, focusKey:'', timer:null };
+const PRED_TAU = 8;      // uncertainty in each team's true strength (points)
+const PRED_HFA = 3;      // playoff home-field points per seed of difference
+const PRED_SIMS = 2500;
+const PRED_FOCUS_SIMS = 700;
+
+function predStoreKey(suffix){ return 'srffl_predictor_' + currentSeason + suffix; }
+function predLoadPicks(){
+  if(PRED.loadedFor === currentSeason) return;
+  PRED.loadedFor = currentSeason;
+  PRED.open = null; PRED.week = null; PRED.focus = ''; PRED.sim = null; PRED.focusSim = null;
+  try{ PRED.picks = JSON.parse(localStorage.getItem(predStoreKey('')) || '{}') || {}; }catch(e){ PRED.picks = {}; }
+  try{ PRED.po = JSON.parse(localStorage.getItem(predStoreKey('_po')) || '{}') || {}; }catch(e){ PRED.po = {}; }
+}
+function predSavePicks(){
+  try{
+    localStorage.setItem(predStoreKey(''), JSON.stringify(PRED.picks));
+    localStorage.setItem(predStoreKey('_po'), JSON.stringify(PRED.po));
+  }catch(e){}
+}
+
+function predNormCdf(x){
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+  const erf = 1 - poly * Math.exp(-z * z);
+  return x >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf);
+}
+function predRng(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function predNormal(rng){ let u = 0; while(u === 0) u = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng()); }
+
+function predRosterOf(ownerId){ return (data.rosters[currentSeason] && data.rosters[currentSeason][ownerId]) || []; }
+function predOwner(id){ return data.owners.find(o=> o.id === id); }
+function predTeamName(id){ const o = predOwner(id); return o ? (o.team || o.name) : '?'; }
+
+// Best starting lineup for a roster using projected value (half season PPG, half last three games).
+function predLineup(roster, filler){
+  const slots = ensureLineupSlots();
+  const players = roster.map(p=>({ p, pos: normalizePos(p.pos), val: projectedValue(p) })).filter(x=> x.val !== null).sort((a,b)=> b.val - a.val);
+  const cand = slots.map(s=> players.filter(x=> s.includes(x.pos)).slice(0, 5));
+  let best = { total: -Infinity, pick: [] };
+  const used = new Set(); const cur = [];
+  (function dfs(i, total){
+    if(i === slots.length){ if(total > best.total) best = { total, pick: cur.slice() }; return; }
+    let tried = false;
+    for(const x of cand[i]){
+      if(used.has(x)) continue;
+      tried = true; used.add(x); cur[i] = x; dfs(i + 1, total + x.val); used.delete(x);
+    }
+    if(!tried){ cur[i] = null; dfs(i + 1, total + ((filler && filler[slots[i][0]]) || 0)); }
+  })(0, 0);
+  return { slots, total: best.total === -Infinity ? 0 : best.total, pick: best.pick, players };
+}
+
+// Team strength = an even mix of each team's actual average score and the projected points of its best lineup.
+function predGetModel(){
+  if(PRED.model) return PRED.model;
+  const year = currentSeason;
+  const played = (data.schedule[year] || []).filter(isPlayed).slice().sort((a,b)=> a.week - b.week);
+  const scores = {}; data.owners.forEach(o=>{ scores[o.id] = []; });
+  played.forEach(g=>{
+    if(scores[g.homeId]) scores[g.homeId].push(g.homeScore);
+    if(scores[g.awayId]) scores[g.awayId].push(g.awayScore);
+  });
+  const all = Object.values(scores).flat();
+  const leagueAvg = all.length ? all.reduce((a,b)=> a + b, 0) / all.length : 0;
+  const byPos = {};
+  data.owners.forEach(o=> predRosterOf(o.id).forEach(p=>{
+    const v = projectedValue(p); if(v === null) return;
+    const pos = normalizePos(p.pos); (byPos[pos] = byPos[pos] || []).push(v);
+  }));
+  const filler = {};
+  ['DEF', 'K'].forEach(pos=>{ const v = byPos[pos]; if(v && v.length) filler[pos] = v.reduce((a,b)=> a + b, 0) / v.length; });
+  const lineups = {};
+  data.owners.forEach(o=>{ lineups[o.id] = predLineup(predRosterOf(o.id), filler); });
+  const Ls = data.owners.map(o=> lineups[o.id].total).filter(x=> x > 0);
+  const avgL = Ls.length ? Ls.reduce((a,b)=> a + b, 0) / Ls.length : 0;
+  const scale = (leagueAvg > 0 && avgL > 0) ? leagueAvg / avgL : 1;
+  const mu = {}, avg = {};
+  data.owners.forEach(o=>{
+    const s = scores[o.id];
+    const A = s.length ? s.reduce((a,b)=> a + b, 0) / s.length : null;
+    const Lp = lineups[o.id].total > 0 ? lineups[o.id].total * scale : null;
+    avg[o.id] = A;
+    if(A !== null && Lp !== null) mu[o.id] = 0.5 * A + 0.5 * Lp;
+    else if(A !== null) mu[o.id] = A;
+    else if(Lp !== null) mu[o.id] = Lp;
+    else mu[o.id] = leagueAvg || 100;
+  });
+  let ss = 0, dof = 0;
+  data.owners.forEach(o=>{
+    const s = scores[o.id]; if(s.length < 2) return;
+    const m = avg[o.id]; s.forEach(x=>{ ss += (x - m) * (x - m); }); dof += s.length - 1;
+  });
+  const sd = dof >= 6 ? Math.sqrt(ss / dof) : 27;
+  const center = leagueAvg > 0 ? leagueAvg : 100;
+  PRED.model = { mu, avg, lineups, sd, leagueAvg, scores, lo: Math.max(0, center - 2.4 * sd), hi: center + 2.6 * sd };
+  return PRED.model;
+}
+function predWinProb(model, a, b){
+  const s = Math.sqrt(2 * model.sd * model.sd + 2 * PRED_TAU * PRED_TAU);
+  return predNormCdf((model.mu[a] - model.mu[b]) / s);
+}
+function predDraw(rng, model, str){
+  let x, guard = 0;
+  do{ x = str + model.sd * predNormal(rng); guard++; }while((x < model.lo || x > model.hi) && guard < 25);
+  return Math.min(model.hi, Math.max(model.lo, x));
+}
+
+/* --- standings with picks --- */
+function predBase(){
+  const all = data.schedule[currentSeason] || [];
+  return {
+    played: all.filter(isPlayed),
+    unplayed: all.filter(g=> !isPlayed(g) && g.homeId && g.awayId).sort((a,b)=> a.week - b.week),
+    table: computeStandings(currentSeason)
+  };
+}
+function predCloneTable(t){
+  const o = {};
+  Object.keys(t).forEach(id=>{ const r = t[id]; o[id] = { wins:r.wins, losses:r.losses, ties:r.ties, pf:r.pf, pa:r.pa }; });
+  return o;
+}
+function predApply(table, games, g, hs, as){
+  const h = table[g.homeId], a = table[g.awayId];
+  if(!h || !a) return;
+  h.pf += hs; h.pa += as; a.pf += as; a.pa += hs;
+  if(hs > as){ h.wins++; a.losses++; } else if(hs < as){ a.wins++; h.losses++; } else { h.ties++; a.ties++; }
+  games.push({ homeId:g.homeId, awayId:g.awayId, homeScore:hs, awayScore:as, week:g.week });
+}
+// A picked game needs a score for the tiebreakers: use each team's projected score, nudged so the pick wins.
+function predPickScores(model, g, winnerId){
+  let hs = model.mu[g.homeId], as = model.mu[g.awayId];
+  const homeWins = winnerId === g.homeId;
+  if(homeWins && hs - as < 1){ const m = (hs + as) / 2; hs = m + 1; as = m - 1; }
+  if(!homeWins && as - hs < 1){ const m = (hs + as) / 2; as = m + 1; hs = m - 1; }
+  return { hs, as };
+}
+function predRank(table, games){
+  const groups = {};
+  data.owners.forEach(o=>{
+    const r = table[o.id]; const gp = r.wins + r.losses + r.ties;
+    const pct = gp > 0 ? (r.wins + 0.5 * r.ties) / gp : 0;
+    (groups[pct.toFixed(4)] = groups[pct.toFixed(4)] || []).push(o.id);
+  });
+  return Object.keys(groups).sort((a,b)=> Number(b) - Number(a)).flatMap(k=> tiebreakGroup(groups[k], games, table));
+}
+function predPickedState(model, includeFavorites){
+  const base = predBase();
+  const table = predCloneTable(base.table); const games = base.played.slice();
+  const remaining = {}; data.owners.forEach(o=>{ remaining[o.id] = 0; });
+  base.unplayed.forEach(g=>{
+    let w = PRED.picks[g.id];
+    if(w !== g.homeId && w !== g.awayId) w = null;
+    if(!w && includeFavorites) w = predWinProb(model, g.homeId, g.awayId) >= 0.5 ? g.homeId : g.awayId;
+    if(w){ const s = predPickScores(model, g, w); predApply(table, games, g, s.hs, s.as); }
+    else { remaining[g.homeId]++; remaining[g.awayId]++; }
+  });
+  return { table, games, remaining, unplayed: base.unplayed };
+}
+// Clinched / eliminated using only wins: no tiebreaker is assumed to go anyone's way.
+function predStatuses(table, remaining){
+  const info = {};
+  data.owners.forEach(o=>{ const r = table[o.id]; const w = r.wins + 0.5 * r.ties; info[o.id] = { min: w, max: w + (remaining[o.id] || 0) }; });
+  const out = {};
+  data.owners.forEach(o=>{
+    const me = info[o.id]; let reach = 0, above = 0;
+    data.owners.forEach(p=>{ if(p.id === o.id) return; if(info[p.id].max >= me.min) reach++; if(info[p.id].min > me.max) above++; });
+    out[o.id] = reach <= 7 ? 'in' : (above >= 8 ? 'out' : '');
+  });
+  return out;
+}
+
+/* --- Monte Carlo --- */
+function predPlayoffs(seeds, str, rng, model){
+  function play(sa, sb){
+    const a = seeds[sa - 1], b = seeds[sb - 1];
+    const better = Math.min(sa, sb), worse = Math.max(sa, sb), bonus = PRED_HFA * (worse - better);
+    let pa = predDraw(rng, model, str[a]), pb = predDraw(rng, model, str[b]);
+    if(sa < sb) pa += bonus; else pb += bonus;
+    return pa > pb ? sa : sb;
+  }
+  const q = [play(1, 8), play(4, 5), play(2, 7), play(3, 6)];
+  const s = [play(q[0], q[1]), play(q[2], q[3])];
+  return seeds[play(s[0], s[1]) - 1];
+}
+function predSimulate(model, n, force){
+  const base = predBase();
+  const ids = data.owners.map(o=> o.id);
+  const rng = predRng(20261);
+  const res = {}; ids.forEach(id=>{ res[id] = { playoffs:0, seed:Array(8).fill(0), title:0, wins:0 }; });
+  const t0 = predCloneTable(base.table); const g0 = base.played.slice();
+  const open = [];
+  base.unplayed.forEach(g=>{
+    const w = PRED.picks[g.id];
+    if(w === g.homeId || w === g.awayId){ const s = predPickScores(model, g, w); predApply(t0, g0, g, s.hs, s.as); }
+    else open.push(g);
+  });
+  const mine = force ? open.filter(g=> g.homeId === force.id || g.awayId === force.id) : [];
+  for(let i = 0; i < n; i++){
+    const str = {}; ids.forEach(id=>{ str[id] = model.mu[id] + PRED_TAU * predNormal(rng); });
+    const table = predCloneTable(t0); const games = g0.slice();
+    let winSet = null;
+    if(force){
+      const idx = mine.map((_, k)=> k);
+      for(let k = idx.length - 1; k > 0; k--){ const j = Math.floor(rng() * (k + 1)); const tmp = idx[k]; idx[k] = idx[j]; idx[j] = tmp; }
+      winSet = new Set(idx.slice(0, force.wins).map(k=> mine[k].id));
+    }
+    open.forEach(g=>{
+      let hs = predDraw(rng, model, str[g.homeId]), as = predDraw(rng, model, str[g.awayId]);
+      if(force && (g.homeId === force.id || g.awayId === force.id)){
+        const teamHome = g.homeId === force.id;
+        const ts = teamHome ? hs : as, os = teamHome ? as : hs;
+        const wantWin = winSet.has(g.id);
+        if((wantWin && ts <= os) || (!wantWin && ts >= os)){ const tmp = hs; hs = as; as = tmp; }
+      }
+      predApply(table, games, g, hs, as);
+    });
+    const order = predRank(table, games);
+    order.forEach((id, k)=>{
+      const r = table[id]; res[id].wins += r.wins + 0.5 * r.ties;
+      if(k < 8){ res[id].playoffs++; res[id].seed[k]++; }
+    });
+    if(order.length >= 8){ res[predPlayoffs(order.slice(0, 8), str, rng, model)].title++; }
+  }
+  return { res, n };
+}
+
+/* --- rendering --- */
+function predPickKey(){ return JSON.stringify(Object.keys(PRED.picks).sort().map(k=> [k, PRED.picks[k]])); }
+function predPct(x, n){ const p = 100 * x / n; return p >= 99.5 && x < n ? '>99%' : (p < 0.5 && x > 0 ? '<1%' : Math.round(p) + '%'); }
+function predRecText(r){ return r.wins + '-' + r.losses + (r.ties ? '-' + r.ties : ''); }
+// Record shown inside a game card: real results plus OTHER picks, never this game's own pick.
+function predRecBefore(table, id, pick){
+  const r = table[id];
+  return predRecText({ wins: r.wins - (pick === id ? 1 : 0), losses: r.losses - (pick && pick !== id ? 1 : 0), ties: r.ties });
+}
+
+function predCompareHTML(g, model, table){
+  const slotsLbl = (s)=> s.join('/');
+  const col = (id, oppId)=>{
+    const lu = model.lineups[id];
+    const startersSet = new Set(lu.pick.filter(Boolean));
+    const rows = lu.slots.map((s, i)=>{
+      const x = lu.pick[i];
+      return `<div class="pc-line"><span class="pc-slot">${slotsLbl(s)}</span><span class="pc-pl">${x ? x.p.name : '<em>empty</em>'}</span><span class="pc-val">${x ? x.val.toFixed(1) : '-'}</span></div>`;
+    }).join('');
+    const bench = lu.players.filter(x=> !startersSet.has(x)).sort((a,b)=> b.val - a.val).slice(0, 8).map(x=>
+      `<div class="pc-line bench"><span class="pc-slot">${x.pos}</span><span class="pc-pl">${x.p.name}</span><span class="pc-val">${x.val.toFixed(1)}</span></div>`
+    ).join('');
+    const s = model.scores[id] || [];
+    const last3 = s.length ? s.slice(-3).reduce((a,b)=> a + b, 0) / Math.min(3, s.length) : null;
+    return `
+      <div class="pc-col">
+        <div class="pc-head">${teamLogoHTML(id, currentSeason)}<div><div class="pc-team">${predTeamName(id)}</div><div class="pc-sub">${predRecBefore(table, id, PRED.picks[g.id])}</div></div></div>
+        <div class="pc-stats"><span>Projected lineup <b>${lu.total.toFixed(1)}</b></span><span>Avg score <b>${model.avg[id] !== null ? model.avg[id].toFixed(1) : '-'}</b></span><span>Last 3 <b>${last3 !== null ? last3.toFixed(1) : '-'}</b></span></div>
+        <div class="pc-title">Starting lineup</div>${rows}
+        ${bench ? `<div class="pc-title">Bench</div>${bench}` : ''}
+      </div>`;
+  };
+  const meet = predBase().played.filter(x=> (x.homeId === g.homeId && x.awayId === g.awayId) || (x.homeId === g.awayId && x.awayId === g.homeId));
+  const meetTxt = meet.length ? `<p class="pc-note">Already met this season: ${meet.map(x=> `Week ${x.week}, ${predTeamName(x.homeId)} ${x.homeScore} - ${x.awayScore} ${predTeamName(x.awayId)}`).join('; ')}.</p>` : '';
+  return `<div class="pg-compare"><div class="pc-cols">${col(g.homeId, g.awayId)}${col(g.awayId, g.homeId)}</div>${meetTxt}
+    <p class="pc-note">Player numbers are projected points: half season average, half last three games. Win chances come from team scoring so far plus each lineup.</p></div>`;
+}
+
+function predGameCard(g, model, table){
+  const pick = PRED.picks[g.id];
+  const pH = predWinProb(model, g.homeId, g.awayId), pA = 1 - pH;
+  const idxH = data.owners.findIndex(o=> o.id === g.homeId), idxA = data.owners.findIndex(o=> o.id === g.awayId);
+  const btn = (id, p)=> `
+    <button class="pg-team ${pick === id ? 'win' : ''} ${pick && pick !== id ? 'lose' : ''}" data-pick="${g.id}|${id}">
+      ${teamLogoHTML(id, currentSeason)}
+      <span class="pg-info"><span class="pg-name">${predTeamName(id)}</span><span class="pg-meta">${predRecBefore(table, id, pick)} &middot; ${Math.round(p * 100)}%</span></span>
+    </button>`;
+  return `
+    <div class="pg-card ${PRED.open === g.id ? 'open' : ''}" data-game="${g.id}">
+      <div class="pg-row">${btn(g.homeId, pH)}<span class="pg-vs">vs</span>${btn(g.awayId, pA)}</div>
+      <div class="pg-prob"><span style="width:${(pH * 100).toFixed(1)}%; background:${colorFor(idxH < 0 ? 0 : idxH)}"></span><span style="width:${(pA * 100).toFixed(1)}%; background:${colorFor(idxA < 0 ? 0 : idxA)}"></span></div>
+      <div class="pg-hint"><span>${pick ? 'Pick: ' + predTeamName(pick) + ' (tap again to clear)' : 'Tap a team to pick the winner'}</span><button class="pg-toggle" data-open="${g.id}">${PRED.open === g.id ? 'Hide rosters' : 'Compare rosters'}</button></div>
+      ${PRED.open === g.id ? predCompareHTML(g, model, table) : ''}
+    </div>`;
+}
+
+function predBracketHTML(model, order){
+  const seeds = order.slice(0, 8);
+  const po = PRED.po;
+  const valid = (key, a, b)=> (a && b && (po[key] === a || po[key] === b)) ? po[key] : null;
+  const qfPairs = [[1, 8], [4, 5], [2, 7], [3, 6]];
+  const qfW = qfPairs.map((p, i)=> valid('qf' + i, p[0], p[1]));
+  const sfPairs = [[qfW[0], qfW[1]], [qfW[2], qfW[3]]];
+  const sfW = sfPairs.map((p, i)=> valid('sf' + i, p[0], p[1]));
+  const fW = valid('f', sfW[0], sfW[1]);
+  const seedBtn = (key, seed, opp)=>{
+    const id = seeds[seed - 1];
+    const better = Math.min(seed, opp), bonus = PRED_HFA * Math.abs(seed - opp);
+    const s = Math.sqrt(2 * model.sd * model.sd + 2 * PRED_TAU * PRED_TAU);
+    const edge = (seed < opp ? bonus : 0) - (seed > opp ? bonus : 0);
+    const p = predNormCdf((model.mu[id] + edge - model.mu[seeds[opp - 1]]) / s);
+    return `<button class="pb-team ${po[key] === seed ? 'win' : ''} ${po[key] && po[key] !== seed ? 'lose' : ''}" data-po="${key}|${seed}">
+      <span class="bracket-seed">${seed}</span>${teamLogoHTML(id, currentSeason)}<span class="pb-name">${predTeamName(id)}</span><span class="pb-p">${Math.round(p * 100)}%</span></button>`;
+  };
+  const match = (key, a, b, title)=>{
+    if(!a || !b) return `<div class="pb-match tbd"><div class="pb-title">${title}</div><div class="pb-tbd">Waiting on earlier picks</div></div>`;
+    const bonus = PRED_HFA * Math.abs(a - b), best = Math.min(a, b);
+    return `<div class="pb-match"><div class="pb-title">${title}</div>${seedBtn(key, a, b)}${seedBtn(key, b, a)}<div class="pb-hfa">Home field: +${bonus} for #${best} (3 per seed)</div></div>`;
+  };
+  const champId = fW ? seeds[fW - 1] : null;
+  return `
+    <div class="pb-round"><div class="pb-rlabel">Quarterfinals (Week 15)</div>${qfPairs.map((p, i)=> match('qf' + i, p[0], p[1], '#' + p[0] + ' vs #' + p[1])).join('')}</div>
+    <div class="pb-round"><div class="pb-rlabel">Semifinals (Week 16)</div>${sfPairs.map((p, i)=> match('sf' + i, p[0], p[1], 'Semifinal ' + (i + 1))).join('')}</div>
+    <div class="pb-round"><div class="pb-rlabel">Championship (Week 17)</div>${match('f', sfW[0], sfW[1], 'Final')}</div>
+    ${champId ? `<div class="pb-champ">${teamLogoHTML(champId, currentSeason)}<span>Champion: <b>${predTeamName(champId)}</b></span></div>` : ''}`;
+}
+
+function predOddsRows(model, state, statuses){
+  const order = predRank(state.table, state.games);
+  const sim = PRED.sim;
+  let html = '';
+  order.forEach((id, i)=>{
+    if(i === 8) html += `<tr class="playoff-divider"><td colspan="6">Playoff line: top 8</td></tr>`;
+    const r = state.table[id];
+    const st = statuses[id];
+    const badge = st === 'in' ? '<span class="pd-badge in">in</span>' : (st === 'out' ? '<span class="pd-badge out">out</span>' : '');
+    const o = sim ? sim.res[id] : null;
+    html += `<tr class="${PRED.focus === id ? 'pd-focus' : ''}">
+      <td>${i + 1}</td>
+      <td><span class="team-cell">${teamLogoHTML(id, currentSeason)}<span class="team-cell-name">${predTeamName(id)}</span></span>${badge}</td>
+      <td class="num">${predRecText(r)}</td>
+      <td class="num">${o ? predPct(o.playoffs, sim.n) : '...'}</td>
+      <td class="num">${o ? predPct(o.seed[0], sim.n) : '...'}</td>
+      <td class="num">${o ? predPct(o.title, sim.n) : '...'}</td>
+    </tr>`;
+  });
+  return html;
+}
+
+function predFocusHTML(model, state){
+  const opts = data.owners.slice().sort((a,b)=> (a.team || a.name).localeCompare(b.team || b.name)).map(o=> `<option value="${o.id}" ${PRED.focus === o.id ? 'selected' : ''}>${o.team || o.name}</option>`).join('');
+  let body = '';
+  if(PRED.focus){
+    const rem = state.remaining[PRED.focus] || 0;
+    const fs = PRED.focusSim;
+    if(rem === 0){
+      const ord = predRank(state.table, state.games); const pos = ord.indexOf(PRED.focus) + 1;
+      body = `<p class="hint">Every remaining game for this team is picked. Under your picks it finishes #${pos} and ${pos <= 8 ? 'makes' : 'misses'} the playoffs. Clear a pick to see what it needs.</p>`;
+    } else if(fs && fs.key === PRED.simKey + '|' + PRED.focus){
+      const rows = fs.rows.map(r=> `<tr><td>${r.wins} of ${rem}</td><td class="num">${predPct(r.playoffs, r.n)}</td><td class="num">${predPct(r.top, r.n)}</td></tr>`).join('');
+      const need = fs.rows.find(r=> r.playoffs / r.n >= 0.5);
+      const safe = fs.rows.find(r=> r.playoffs / r.n >= 0.9);
+      body = rem === 0 ? '' : `<div class="card"><table><thead><tr><th>Wins in its remaining games</th><th class="num">Playoffs</th><th class="num">Top seed</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${rem === 0 ? '' : `<p class="hint" style="margin-top:.5rem;">${need ? `Winning ${need.wins} of ${rem} makes it more likely than not${safe ? `, and ${safe.wins} of ${rem} is close to safe` : ''}.` : 'Even winning out leaves it under 50%.'} Other unpicked games are simulated.</p>`}`;
+    } else {
+      body = `<p class="hint">Working it out...</p>`;
+    }
+  }
+  return `<select id="predFocus"><option value="">Pick a team...</option>${opts}</select>${body}`;
+}
+
+function renderPredictor(full){
+  const root = document.getElementById('predictorRoot');
+  if(!root) return;
+  if(full){ PRED.model = null; PRED.sim = null; PRED.focusSim = null; PRED.simKey = ''; }
+  if(!document.getElementById('panel-standings').classList.contains('active')) return;
+  predLoadPicks();
+  if(data.owners.length < 8 || !(data.schedule[currentSeason] || []).length){
+    root.innerHTML = `<h2 class="section-title">Playoff Predictor</h2><div class="empty">Add at least 8 teams and the schedule to use the predictor.</div>`;
+    return;
+  }
+  const model = predGetModel();
+  const base = predBase();
+  // drop picks for games that have since been played
+  Object.keys(PRED.picks).forEach(id=>{ if(!base.unplayed.some(g=> g.id === id)) delete PRED.picks[id]; });
+  const weeks = [...new Set(base.unplayed.map(g=> g.week))].sort((a,b)=> a - b);
+  if(!weeks.length){
+    root.innerHTML = `<h2 class="section-title">Playoff Predictor</h2><div class="empty">Every regular-season game is final. The playoff picture above is set.</div>`;
+    return;
+  }
+  if(PRED.week === null || !weeks.includes(PRED.week)) PRED.week = weeks[0];
+  const doneWeeks = [...new Set((data.schedule[currentSeason] || []).filter(isPlayed).map(g=> g.week))].sort((a,b)=> a - b);
+  const state = predPickedState(model, false);
+  const statuses = predStatuses(state.table, state.remaining);
+  const picked = base.unplayed.filter(g=> PRED.picks[g.id]).length;
+  const chips = weeks.map(w=>{
+    const gs = base.unplayed.filter(g=> g.week === w); const c = gs.filter(g=> PRED.picks[g.id]).length;
+    return `<button class="pw-chip ${w === PRED.week ? 'on' : ''}" data-pw="${w}">Week ${w}<span class="pw-count">${c}/${gs.length}</span></button>`;
+  }).join('');
+  const cards = base.unplayed.filter(g=> g.week === PRED.week).map(g=> predGameCard(g, model, state.table)).join('');
+  const projected = predPickedState(model, true);
+  const order = predRank(projected.table, projected.games);
+  root.innerHTML = `
+    <h2 class="section-title">Playoff Predictor</h2>
+    <p class="hint">Pick a winner for any remaining game. The standings, seeds and playoff odds below update as you go. Games that are already played are locked.</p>
+    <div class="pred-bar">
+      <button class="btn small" id="predAuto">Pick all favorites</button>
+      <button class="btn small" id="predClear">Clear my picks</button>
+      <span class="pred-count">${picked} of ${base.unplayed.length} games picked</span>
+    </div>
+    ${doneWeeks.length ? `<p class="pred-final">${doneWeeks.length === 1 ? 'Week ' + doneWeeks[0] + ' is' : 'Weeks ' + doneWeeks[0] + (doneWeeks.length > 1 ? '-' + doneWeeks[doneWeeks.length - 1] : '') + ' are'} final and locked.</p>` : ''}
+    <div class="pw-chips">${chips}</div>
+    <div id="predGames">${cards}</div>
+    <h3 class="pred-sub">Standings with your picks</h3>
+    <div class="card" style="overflow-x:auto;"><table class="pred-table">
+      <thead><tr><th>#</th><th>Team</th><th class="num">W-L</th><th class="num">Playoffs</th><th class="num">#1 seed</th><th class="num">Title</th></tr></thead>
+      <tbody id="predStandBody">${predOddsRows(model, state, statuses)}</tbody>
+    </table></div>
+    <p class="hint" style="margin-top:.5rem;">"In" means a playoff spot is clinched and "out" means eliminated, whatever happens in the unpicked games. Records count real results plus your picks. Odds simulate every game you have not picked (${PRED_SIMS.toLocaleString()} runs), and the playoffs use 3 points of home field per seed of difference. Ties go to head-to-head, then points; picked games use projected scores.</p>
+    <h3 class="pred-sub">What does a team need?</h3>
+    <div id="predFocusBox">${predFocusHTML(model, state)}</div>
+    <h3 class="pred-sub">Projected bracket</h3>
+    <p class="hint">Seeds come from your picks, with the favorite winning any game you have not picked. Tap a team to advance it.</p>
+    <div id="predBracket">${predBracketHTML(model, order)}</div>
+  `;
+  predScheduleSims(model, state, statuses);
+}
+
+function predScheduleSims(model, state, statuses){
+  clearTimeout(PRED.timer);
+  const key = predPickKey();
+  PRED.timer = setTimeout(()=>{
+    if(!PRED.sim || PRED.simKey !== key){
+      PRED.sim = predSimulate(model, PRED_SIMS, null);
+      PRED.simKey = key;
+      const body = document.getElementById('predStandBody');
+      if(body) body.innerHTML = predOddsRows(model, state, statuses);
+    }
+    if(PRED.focus){
+      const fk = key + '|' + PRED.focus;
+      if(!PRED.focusSim || PRED.focusSim.key !== fk){
+        const rem = state.remaining[PRED.focus] || 0;
+        const rows = [];
+        for(let k = 0; k <= rem; k++){
+          const r = predSimulate(model, PRED_FOCUS_SIMS, { id: PRED.focus, wins: k });
+          const o = r.res[PRED.focus];
+          rows.push({ wins: k, n: r.n, playoffs: o.playoffs, top: o.seed[0] });
+        }
+        PRED.focusSim = { key: fk, rows };
+        const box = document.getElementById('predFocusBox');
+        if(box) box.innerHTML = predFocusHTML(model, state);
+      }
+    }
+  }, 30);
+}
+
+function predOnClick(e){
+  const t = e.target;
+  const pickBtn = t.closest('[data-pick]');
+  if(pickBtn){
+    const parts = pickBtn.dataset.pick.split('|');
+    const gid = parts[0], winner = parts[1];
+    if(PRED.picks[gid] === winner) delete PRED.picks[gid]; else PRED.picks[gid] = winner;
+    PRED.open = gid; PRED.po = {}; predSavePicks(); renderPredictor(false); return;
+  }
+  const openBtn = t.closest('[data-open]');
+  if(openBtn){ PRED.open = PRED.open === openBtn.dataset.open ? null : openBtn.dataset.open; renderPredictor(false); return; }
+  const chip = t.closest('[data-pw]');
+  if(chip){ PRED.week = Number(chip.dataset.pw); PRED.open = null; renderPredictor(false); return; }
+  const po = t.closest('[data-po]');
+  if(po){
+    const parts = po.dataset.po.split('|'); const key = parts[0], seed = Number(parts[1]);
+    if(PRED.po[key] === seed) delete PRED.po[key]; else PRED.po[key] = seed;
+    // a changed result invalidates everything after it
+    if(key.startsWith('qf')){ delete PRED.po.sf0; delete PRED.po.sf1; delete PRED.po.f; }
+    if(key.startsWith('sf')) delete PRED.po.f;
+    predSavePicks(); renderPredictor(false); return;
+  }
+  if(t.closest('#predAuto')){
+    const model = predGetModel();
+    predBase().unplayed.forEach(g=>{ if(!PRED.picks[g.id]) PRED.picks[g.id] = predWinProb(model, g.homeId, g.awayId) >= 0.5 ? g.homeId : g.awayId; });
+    PRED.po = {}; predSavePicks(); renderPredictor(false); return;
+  }
+  if(t.closest('#predClear')){ PRED.picks = {}; PRED.po = {}; predSavePicks(); renderPredictor(false); return; }
+}
+function predOnChange(e){
+  if(e.target && e.target.id === 'predFocus'){ PRED.focus = e.target.value; renderPredictor(false); }
+}
+(function predWire(){
+  const root = document.getElementById('predictorRoot');
+  if(!root) return;
+  root.addEventListener('click', predOnClick);
+  root.addEventListener('change', predOnChange);
+})();
+
 
 /* ---------- Stats CSV export/import ---------- */
 
@@ -3442,12 +4000,18 @@ FA and NE weeks are missing information, not zeros. Never count them as 0 points
 - Played a full game: fill it in with his real stat line converted to OUR scoring, and count it like any other game. This is how his free-agent weeks get counted.
 - Left the game early with an injury: keep the points but flag the week as injury-shortened, and do not treat it as his normal level.
 - First one or two games back from an injury (limited snaps, or he struggled before finding form): flag it and count it at about half weight, unless his snaps and usage were already back to normal.
-Also scan the numbers already shown for the same problems (for example a low score from a game he left early). Game-log pages often hide current-season rows, so if one source fails, try another (a box score, a game recap, or the player's weekly stats page). If you can only find season totals, or cannot find the game at all, say so and leave the week out rather than guessing.
+Also scan the numbers already shown for the same problems (for example a low score from a game he left early). Game-log pages often hide current-season rows, so if one source fails, try another (a box score, a game recap, or the player's weekly stats page). If you can only find season totals, or cannot find the game at all, say so and leave the week out rather than guessing. Nothing is saved between runs, so do this research fresh every time and do not skip players. What works: the NFL.com player game-log page and each team's official game pages (scoring summary, box score) load as plain text, while ESPN player pages do not. A kicker's week needs the distance of every field goal and every PAT, so use the scoring summary or play-by-play.
 
 === ADJUST FOR OPPONENTS AND THE SCHEDULE (required) ===
-Use the real NFL schedule (opponents for Weeks 15 to 17 are already set even where game times are still TBD). For each player who matters, list his opponent for every game counted so far and for every remaining week through Week 17, plus his bye week. Rate each opponent's defense against his position (points or yards allowed to the position, or its rank). Then:
+Use the real NFL schedule. Every team's full 2026 schedule is published, so you can always find the opponent for every week through 17 (Weeks 15 to 17 are set even where game times are still TBD); never leave a player's late-season opponents as "not verified". Look up each player's team schedule page. For each player who matters, list his opponent for every game counted so far and for every remaining week through Week 17, plus his bye week. Rate each opponent's defense against his position (points or yards allowed to the position, or its rank). Then:
 - Compare each counted game with what a player in his role typically scores against that defense. Show his matchup-adjusted PPG next to his raw PPG. Say plainly when a hot streak came against weak defenses (discount it) or a slump came against strong ones (do not punish it).
-- Project his remaining games, and especially Weeks 15 to 17, with the same adjustment.
+- Project his remaining games, and especially Weeks 15 to 17, with the same adjustment. If you cannot find current-season defense-versus-position numbers, say so plainly and use last season's final numbers or preseason strength of schedule, labeled as that.
+
+=== CHECK ROLES AND DEPTH CHARTS (required) ===
+Raw points hide roles. For every player in a trade you consider, AND for every starter in the lineup of the team you would trade with, find out who is the real starter, who is hurt, and when each is expected back. Then value the player for the role he will have:
+- Points scored while a teammate was hurt (a fill-in) are not that player's value once the starter returns. Value him as a backup (a handful of points), and value the returning starter at his normal level. Example: a back who ran for 23 because the starter missed two games goes back to the bench when the starter returns.
+- An injured starter in the other team's lineup means their hole is bigger than the numbers show, and a fill-in's good weeks may vanish. Judge whether the other owner will say yes on the lineup they will actually have, not the one the raw points produce.
+- Run any trade that depends on a fill-in under both cases (starter back, starter still out) and prefer trades that work in both.
 
 === BUILD A REALISTIC VALUE FOR EVERY PLAYER THAT MATTERS ===
 - Season PPG and last-3-games PPG over REAL games only: the numbers shown, plus the weeks you filled in, with the injury flags and the matchup adjustment applied.
@@ -3489,7 +4053,7 @@ Deliver the report as a finished document FILE: a Word (.docx) file if you can c
 6. Other deals checked: a table (team, deal, my change, their change, why it falls short).
 7. Free agents to add: a table (player, position, why now), plus drop candidates.
 8. Every team, even if no good trade exists: a table with the team's record and lineup total, whether they can still trade, biggest needs, players they have that could help me, and what I have that could help them (with the size of their gain and my cost). Finish with one sentence naming my best partners and who to try next.
-9. Data fill-in and notes: which FA and NE weeks you filled in, which you left out and why, how the points are calculated, that the data is as of the date above, and anything not verified.
+9. Data fill-in and notes: which FA and NE weeks you filled in, which you left out and why, how the points are calculated, that the data is as of the date above, and anything not verified. 
 Never force a bad trade. If trades are closed, my team is eliminated, or nothing good exists, say so and still give sections 2, 3, 7 and 8.`;
 
 function tfNum(n){ return (Number(n) || 0).toFixed(2).replace(/\.?0+$/, ''); }
