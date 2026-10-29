@@ -346,6 +346,8 @@
   .txn-row .txn-action{ font-weight:700; }
   .txn-row .txn-action.add{ color:var(--field); }
   .txn-row .txn-action.drop{ color:var(--red); }
+  .txn-row .txn-action.trade{ color:#1a5fb4; display:block; margin-bottom:.15rem; }
+  .txn-row.trade{ align-items:flex-start; border-left:4px solid #1a5fb4; }
   .txn-row .txn-week{ font-size:.7rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
 
   /* Locking / started */
@@ -2130,9 +2132,9 @@ function applyTransaction(year, ownerId, action, playerName, playerPos){
   }
 }
 
-function addTransaction(year, week, ownerId, action, playerName, playerPos){
+function addTransaction(year, week, ownerId, action, playerName, playerPos, extra){
   ensureTransactionsSeason(year);
-  data.transactions[year].push({ id: uid(), week: Number(week), ownerId, action, playerName, pos: playerPos });
+  data.transactions[year].push({ id: uid(), week: Number(week), ownerId, action, playerName, pos: playerPos, ...(extra || {}) });
   applyTransaction(year, ownerId, action, playerName, playerPos);
 }
 
@@ -2140,9 +2142,13 @@ function computeRosterAsOfWeek(year, ownerId, week){
   ensureSeasonRosters(year);
   ensureTransactionsSeason(year);
   const roster = [...(data.rosters[year][ownerId] || [])];
+  // Undo later moves newest-first. Within one week that means reverse entry order, so a
+  // drop followed by a re-add of the same player (or add then drop) unwinds correctly.
   const laterTxns = data.transactions[year]
-    .filter(t=> t.ownerId === ownerId && t.week > week)
-    .sort((a,b)=> b.week - a.week);
+    .map((t,i)=>({ t, i }))
+    .filter(x=> x.t.ownerId === ownerId && x.t.week > week)
+    .sort((a,b)=> (b.t.week - a.t.week) || (b.i - a.i))
+    .map(x=> x.t);
   laterTxns.forEach(t=>{
     if(t.action === 'add'){
       const idx = roster.findIndex(p=>statKey(p.name) === statKey(t.playerName));
@@ -2166,16 +2172,30 @@ function renderTxnList(){
     listRoot.innerHTML = `<div class="empty">Add teams in the Rosters tab first.</div>`;
     return;
   }
-  const txns = [...data.transactions[currentSeason]].sort((a,b)=> b.week - a.week);
-  if(txns.length === 0){
+  const all = data.transactions[currentSeason];
+  if(all.length === 0){
     listRoot.innerHTML = `<div class="empty">No transactions logged yet.${editMode ? ' Click "+ Add transaction" below.' : ''}</div>`;
     return;
   }
-  listRoot.innerHTML = txns.map(t=>{
-    const owner = data.owners.find(o=>o.id === t.ownerId);
+  const teamName = id => { const o = data.owners.find(o=>o.id === id); return o ? (o.team || o.name) : 'Unknown team'; };
+  const items = buildTxnItems(all);
+  listRoot.innerHTML = items.map(it=>{
+    if(it.kind === 'trade'){
+      const sides = it.sides.map(s=>`<div><strong>${teamName(s.from)}</strong> sent ${s.players.map(p=>`${p.name} (${p.pos || '—'})`).join(', ')} to <strong>${teamName(s.to)}</strong></div>`).join('');
+      return `
+        <div class="txn-row trade">
+          <span><span class="txn-action trade">Trade</span>${sides}</span>
+          <span style="display:flex; align-items:center; gap:.5rem;">
+            <span class="txn-week">Week ${it.week}</span>
+            ${editMode ? `<button class="btn-danger btn small" data-del-txn="${it.ids.join(',')}">Remove</button>` : ''}
+          </span>
+        </div>
+      `;
+    }
+    const t = it.t;
     return `
       <div class="txn-row">
-        <span><span class="txn-action ${t.action}">${t.action === 'add' ? 'Added' : 'Dropped'}</span> ${t.playerName} (${t.pos || '—'}) ${t.action === 'add' ? 'to' : 'from'} ${owner ? (owner.team || owner.name) : 'Unknown team'}</span>
+        <span><span class="txn-action ${t.action}">${t.action === 'add' ? 'Added' : 'Dropped'}</span> ${t.playerName} (${t.pos || '—'}) ${t.action === 'add' ? 'to' : 'from'} ${teamName(t.ownerId)}</span>
         <span style="display:flex; align-items:center; gap:.5rem;">
           <span class="txn-week">Week ${t.week}</span>
           ${editMode ? `<button class="btn-danger btn small" data-del-txn="${t.id}">Remove</button>` : ''}
@@ -2186,12 +2206,81 @@ function renderTxnList(){
 
   listRoot.querySelectorAll('[data-del-txn]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      if(!confirm('Remove this transaction log entry? This does NOT automatically undo the roster change — adjust rosters manually if needed.')) return;
-      data.transactions[currentSeason] = data.transactions[currentSeason].filter(t=>t.id !== btn.dataset.delTxn);
+      const ids = btn.dataset.delTxn.split(',');
+      const msg = ids.length > 1
+        ? `Remove this whole trade (${ids.length} log entries)? This does NOT automatically undo the roster changes — adjust rosters manually if needed.`
+        : 'Remove this transaction log entry? This does NOT automatically undo the roster change — adjust rosters manually if needed.';
+      if(!confirm(msg)) return;
+      data.transactions[currentSeason] = data.transactions[currentSeason].filter(t=> !ids.includes(t.id));
       saveData();
       renderTxnList();
     });
   });
+}
+
+// Turns the flat add/drop log into display rows, folding trades into one "Trade" row.
+// Trades made from the form share a tradeId. Older trades (logged before that existed) are
+// recognised as: in one week, team A dropped a player that team B added, and B did the same for A.
+function buildTxnItems(all){
+  const entries = all.map((t,i)=>({ t, i }));
+  const used = new Set();
+  const items = [];
+
+  function tradeItem(legs){
+    const sides = {};
+    legs.forEach(l=>{
+      const k = l.from + '>' + l.to;
+      (sides[k] = sides[k] || { from: l.from, to: l.to, players: [] }).players.push({ name: l.d.t.playerName, pos: l.d.t.pos });
+    });
+    const ids = []; let order = Infinity;
+    legs.forEach(l=>{ ids.push(l.d.t.id, l.a.t.id); order = Math.min(order, l.d.i, l.a.i); });
+    return { kind: 'trade', week: legs[0].d.t.week, order, ids, sides: Object.values(sides) };
+  }
+  function pairLegs(list){
+    const legs = []; const usedAdd = new Set();
+    list.filter(e=>e.t.action === 'drop').forEach(d=>{
+      const a = list.find(e=> e.t.action === 'add' && !usedAdd.has(e.t.id) && e.t.week === d.t.week && e.t.ownerId !== d.t.ownerId && statKey(e.t.playerName) === statKey(d.t.playerName));
+      if(a){ usedAdd.add(a.t.id); legs.push({ d, a, from: d.t.ownerId, to: a.t.ownerId }); }
+    });
+    return legs;
+  }
+
+  // 1) trades with a tradeId
+  const byTrade = {};
+  entries.forEach(e=>{ if(e.t.tradeId) (byTrade[e.t.tradeId] = byTrade[e.t.tradeId] || []).push(e); });
+  Object.values(byTrade).forEach(list=>{
+    const legs = pairLegs(list);
+    if(legs.length){ items.push(tradeItem(legs)); list.forEach(e=>used.add(e.t.id)); }
+  });
+
+  // 2) older trades: reciprocal drop/add pairs between the same two teams in the same week
+  const rest = entries.filter(e=>!used.has(e.t.id));
+  const groups = {};
+  pairLegs(rest).forEach(l=>{
+    const k = l.d.t.week + '|' + [l.from, l.to].sort().join('|');
+    (groups[k] = groups[k] || []).push(l);
+  });
+  Object.values(groups).forEach(g=>{
+    if(new Set(g.map(l=>l.from + '>' + l.to)).size >= 2){
+      items.push(tradeItem(g));
+      g.forEach(l=>{ used.add(l.d.t.id); used.add(l.a.t.id); });
+    }
+  });
+
+  entries.forEach(e=>{ if(!used.has(e.t.id)) items.push({ kind: 'txn', t: e.t, week: e.t.week, order: e.i }); });
+  items.sort((a,b)=> (b.week - a.week) || (a.order - b.order));
+  return items;
+}
+
+// The week a new add/drop/trade most likely belongs to: the next week to be played.
+// (The form used to default to Week 1, which silently logged forgotten entries in the wrong week.)
+function currentTxnWeek(){
+  const games = (data.schedule && data.schedule[currentSeason]) || [];
+  if(!games.length) return 1;
+  const playedWeeks = games.filter(isPlayed).map(g=> g.week);
+  const lastWeek = Math.max(...games.map(g=> g.week));
+  const next = playedWeeks.length ? Math.max(...playedWeeks) + 1 : 1;
+  return Math.max(1, Math.min(next, lastWeek, 18));
 }
 
 function renderAddTxnForm(){
@@ -2205,7 +2294,7 @@ function renderAddTxnForm(){
           <option value="trade">Trade</option>
         </select>
       </label>
-      <label>Week <input type="number" id="newTxnWeek" min="1" max="18" value="1" style="width:70px; margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
+      <label>Week <input type="number" id="newTxnWeek" min="1" max="18" value="${currentTxnWeek()}" style="width:70px; margin-left:.4rem; border:1px solid var(--line); border-radius:3px; padding:.2rem .4rem;"></label>
 
       <div id="newTxnSingleTeamField"><label>Team <select id="newTxnTeam" style="margin-left:.4rem;"></select></label></div>
       <div id="newTxnAddFields">
@@ -2286,7 +2375,7 @@ function renderAddTxnForm(){
 
   document.getElementById('submitTxnBtn').addEventListener('click', ()=>{
     const action = document.getElementById('newTxnAction').value;
-    const week = Number(document.getElementById('newTxnWeek').value) || 1;
+    const week = Number(document.getElementById('newTxnWeek').value) || currentTxnWeek();
 
     if(action === 'trade'){
       const aId = teamASel.value, bId = teamBSel.value;
@@ -2294,13 +2383,14 @@ function renderAddTxnForm(){
       const aGives = [...document.querySelectorAll('#newTxnTradeRosterA .trade-player-check:checked')].map(el=>({ name: el.value, pos: el.dataset.pos }));
       const bGives = [...document.querySelectorAll('#newTxnTradeRosterB .trade-player-check:checked')].map(el=>({ name: el.value, pos: el.dataset.pos }));
       if(aGives.length === 0 && bGives.length === 0){ toast('Check at least one player'); return; }
+      const tradeId = uid();
       aGives.forEach(p=>{
-        addTransaction(currentSeason, week, aId, 'drop', p.name, p.pos);
-        addTransaction(currentSeason, week, bId, 'add', p.name, p.pos);
+        addTransaction(currentSeason, week, aId, 'drop', p.name, p.pos, { tradeId });
+        addTransaction(currentSeason, week, bId, 'add', p.name, p.pos, { tradeId });
       });
       bGives.forEach(p=>{
-        addTransaction(currentSeason, week, bId, 'drop', p.name, p.pos);
-        addTransaction(currentSeason, week, aId, 'add', p.name, p.pos);
+        addTransaction(currentSeason, week, bId, 'drop', p.name, p.pos, { tradeId });
+        addTransaction(currentSeason, week, aId, 'add', p.name, p.pos, { tradeId });
       });
     } else {
       const ownerId = teamSel.value;
