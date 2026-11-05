@@ -310,9 +310,13 @@
   .review-table td.legend{ font-size:.68rem; color:var(--ink-soft); }
   .review-legend-note{ font-size:.7rem; color:var(--ink-soft); margin-top:.3rem; }
   .scn-meta{ font-size:.75rem; color:var(--ink-soft); margin:.2rem 0 .5rem; }
-  .scn-team{ margin:.5rem 0; font-size:.85rem; }
-  .scn-team ul{ margin:.25rem 0 0 1.1rem; padding:0; }
-  .scn-team li{ margin:.2rem 0; }
+  .scn-team{ margin:.6rem 0; font-size:.85rem; }
+  .scn-head{ margin-top:.35rem; }
+  .scn-lines{ margin:.15rem 0 .25rem .9rem; }
+  .scn-lines > div{ margin:.15rem 0; }
+  tr.clinched td{ font-weight:700; }
+  tr.clinched td.seed-cell{ font-weight:400; }
+  tr.clinched.seed-locked td.seed-cell{ font-weight:700; }
 
   /* Playoff bracket (shared by Standings tab and Digest) */
   .bracket-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.8rem; align-items:center; max-width:640px; margin:0 auto; }
@@ -1542,8 +1546,8 @@ function renderWeeklyReviewStats(entry){
 
   function standingsRows(rows, offset){
     return rows.map((r,i)=>`
-      <tr>
-        <td>${offset + i + 1}</td>
+      <tr${scnRowClass(scn, r.owner.id, offset + i + 1)}>
+        <td class="seed-cell">${offset + i + 1}</td>
         <td>${r.owner.team || r.owner.name}</td>
         <td class="num">${r.rec.wins}-${r.rec.losses}${r.rec.ties ? '-'+r.rec.ties : ''}</td>
         <td class="num">${r.rec.pf.toFixed(2)}</td>
@@ -2788,6 +2792,7 @@ function renderSeasonStandings(){
     <th class="num">PF</th><th class="num">PA</th><th class="num">DIFF</th>
   `;
 
+  const scn = playoffScenarios(currentSeason, null);
   let html = '';
   rows.forEach((r, i)=>{
     if(anyPlayed && i === 8){
@@ -2795,8 +2800,8 @@ function renderSeasonStandings(){
     }
     const diff = r.rec.pf - r.rec.pa;
     html += `
-      <tr>
-        <td>${i+1}</td>
+      <tr${scnRowClass(scn, r.owner.id, i + 1)}>
+        <td class="seed-cell">${i+1}</td>
         <td><span class="team-cell">${teamLogoHTML(r.owner.id, currentSeason)}<span class="team-cell-name">${r.owner.team}</span></span></td>
         <td class="num">${r.rec.wins}</td>
         <td class="num">${r.rec.losses}</td>
@@ -2811,7 +2816,6 @@ function renderSeasonStandings(){
 
   renderPlayoffBracket(document.getElementById('standingsBracket'), currentSeason);
 
-  const scn = playoffScenarios(currentSeason, null);
   const scnElim = playoffElimHTML(scn);
   const oldElim = scnElim === null && data.owners.length >= 8 ? computeEliminations(currentSeason) : [];
   document.getElementById('standingsScenarios').innerHTML = `
@@ -3667,31 +3671,60 @@ function scnEliminated(ids, w, games, X, spots){
   return !alive;
 }
 
-// Shortest sets of results (over the week's games) that guarantee the outcome. digit: 1 = home wins, 0 = away wins, 2 = any.
-function scnPatterns(maskSet, k){
-  const total = 1 << k, pow3 = []; for(let i = 0; i <= k; i++) pow3[i] = Math.pow(3, i);
-  const n = pow3[k], valid = new Array(n);
-  const decode = code=>{ const d = []; for(let i = 0; i < k; i++){ d.push(Math.floor(code / pow3[i]) % 3); } return d; };
-  for(let code = 0; code < n; code++){
+// The complete scenarios that guarantee an outcome. Each scenario is a set of results that must all happen ("and"); any one
+// scenario is enough ("OR"). trueMasks = the week outcomes (bit i = game i's home team won) where it holds, all with game
+// `skip` already fixed to `skipVal` (skip = -1 for none). Returns the shortest scenarios, fewest results first.
+function scnPaths(trueMasks, k, skip, skipVal){
+  const games = []; for(let i = 0; i < k; i++) if(i !== skip) games.push(i);
+  const n = games.length, pw = []; for(let i = 0; i <= n; i++) pw[i] = Math.pow(3, i);
+  const decode = code=>{ const d = []; let c = code; for(let i = 0; i < n; i++){ d.push(c % 3); c = Math.floor(c / 3); } return d; };
+  const fixedBit = skip >= 0 ? (skipVal << skip) : 0;
+  const valid = new Array(pw[n]);
+  for(let code = 0; code < pw[n]; code++){
     const d = decode(code); let fm = 0, fv = 0;
-    for(let i = 0; i < k; i++){ if(d[i] !== 2){ fm |= (1 << i); if(d[i] === 1) fv |= (1 << i); } }
+    for(let i = 0; i < n; i++){ if(d[i] !== 0){ fm |= (1 << games[i]); if(d[i] === 1) fv |= (1 << games[i]); } }
     let ok = true;
-    for(let m = 0; m < total; m++){ if((m & fm) === fv && !maskSet.has(m)){ ok = false; break; } }
+    for(let m = 0; m < (1 << k) && ok; m++){
+      if(skip >= 0 && ((m >> skip) & 1) !== skipVal) continue;
+      if((m & fm) === fv && !trueMasks.has(m)) ok = false;
+    }
     valid[code] = ok;
   }
-  const primes = [];
-  for(let code = 0; code < n; code++){
+  const out = [];
+  for(let code = 1; code < pw[n]; code++){
     if(!valid[code]) continue;
     const d = decode(code); let prime = true;
-    for(let i = 0; i < k && prime; i++){ if(d[i] !== 2 && valid[code + (2 - d[i]) * pow3[i]]) prime = false; }
-    if(prime) primes.push(d);
+    for(let i = 0; i < n && prime; i++){ if(d[i] !== 0 && valid[code - d[i] * pw[i]]) prime = false; }
+    if(prime) out.push(d.map((x, i)=> x ? { g: games[i], home: x === 1 } : null).filter(Boolean));
   }
-  primes.sort((a, b)=> (a.filter(x=> x !== 2).length - b.filter(x=> x !== 2).length) || (a < b ? -1 : 1));
-  return primes;
+  out.sort((x, y)=>{
+    if(x.length !== y.length) return x.length - y.length;
+    for(let i = 0; i < x.length; i++){ if(x[i].g !== y[i].g) return x[i].g - y[i].g; if(x[i].home !== y[i].home) return x[i].home ? -1 : 1; }
+    return 0;
+  });
+  return out;
+}
+
+// Splits a team's outcomes by its own result and writes each side as scenarios. `order` = which result to list first.
+function scnBlocks(maskSet, k, target, teamId, order){
+  const gi = target.findIndex(g=> g.homeId === teamId || g.awayId === teamId);
+  if(gi < 0) return [{ kind: 'none', paths: scnPaths(maskSet, k, -1, 0), taut: maskSet.size === (1 << k) }];
+  const winBit = target[gi].homeId === teamId ? 1 : 0;
+  const win = new Set(), loss = new Set();
+  maskSet.forEach(m=> (((m >> gi) & 1) === winBit ? win : loss).add(m));
+  const total = 1 << (k - 1);
+  const project = m=> (m & ((1 << gi) - 1)) | ((m >> (gi + 1)) << gi);
+  const mk = (set, kind, bit)=> set.size ? { kind, paths: set.size === total ? [] : scnPaths(set, k, gi, bit), taut: set.size === total } : null;
+  const w = mk(win, 'win', winBit), l = mk(loss, 'loss', 1 - winBit);
+  if(w && l){
+    const pw = new Set([...win].map(project)), pl = new Set([...loss].map(project));
+    if(pw.size === pl.size && [...pw].every(x=> pl.has(x))) return [{ kind: 'either', paths: w.paths, taut: w.taut }];
+  }
+  return (order[0] === 'win' ? [w, l] : [l, w]).filter(Boolean);
 }
 
 // throughWeek: null = use every score entered (Standings tab); a number = the picture as of the end of that week (Digest).
-// statusOnly: skip the scenario enumeration and just report who is already clinched / eliminated.
+// statusOnly: skip the scenario enumeration and just report who is already clinched / eliminated / locked into a seed.
 function playoffScenarios(year, throughWeek, statusOnly){
   const owners = data.owners, ids = owners.map(o=> o.id);
   if(ids.length <= PLAYOFF_SPOTS) return null;
@@ -3711,7 +3744,15 @@ function playoffScenarios(year, throughWeek, statusOnly){
   const allPairs = open.map(g=> [g.homeId, g.awayId]);
   const clinchedNow = ids.filter(t=> scnClinched(ids, w, allPairs, t, PLAYOFF_SPOTS));
   const eliminatedNow = ids.filter(t=> scnEliminated(ids, w, allPairs, t, PLAYOFF_SPOTS));
-  const out = { week: null, games: [], clinchedNow, eliminatedNow, clinch: [], elim: [], raw: { clinch: {}, elim: {} } };
+  const seed1Now = ids.filter(t=> scnClinched(ids, w, allPairs, t, 1));
+  // Locked into the seed they hold right now: guaranteed to finish exactly there (no tie possible with anyone).
+  const seedLocked = {};
+  orderedStandings(year, throughWeek).forEach((r, i)=>{
+    const id = r.owner.id, seed = i + 1;
+    if(seed > PLAYOFF_SPOTS || !clinchedNow.includes(id)) return;
+    if(scnClinched(ids, w, allPairs, id, seed) && (seed === 1 || scnEliminated(ids, w, allPairs, id, seed - 1))) seedLocked[id] = seed;
+  });
+  const out = { week: null, games: [], clinchedNow, eliminatedNow, seed1Now, seedLocked, clinch: [], elim: [], seed1: [], raw: { clinch: {}, elim: {}, seed1: {} } };
   if(statusOnly || !open.length) return out;
 
   const week = Math.min(...open.map(g=> g.week));
@@ -3723,8 +3764,10 @@ function playoffScenarios(year, throughWeek, statusOnly){
 
   const settled = new Set([...clinchedNow, ...eliminatedNow]);
   const live = ids.filter(t=> !settled.has(t));
-  const cMasks = {}, eMasks = {};
+  const live1 = ids.filter(t=> !seed1Now.includes(t) && !eliminatedNow.includes(t));
+  const cMasks = {}, eMasks = {}, oMasks = {};
   live.forEach(t=>{ cMasks[t] = new Set(); eMasks[t] = new Set(); });
+  live1.forEach(t=>{ oMasks[t] = new Set(); });
   for(let m = 0; m < (1 << k); m++){
     const w2 = Object.assign({}, w);
     target.forEach((g, i)=>{ w2[(m >> i) & 1 ? g.homeId : g.awayId] += 1; });
@@ -3732,52 +3775,87 @@ function playoffScenarios(year, throughWeek, statusOnly){
       if(scnClinched(ids, w2, later, t, PLAYOFF_SPOTS)) cMasks[t].add(m);
       if(scnEliminated(ids, w2, later, t, PLAYOFF_SPOTS)) eMasks[t].add(m);
     });
+    live1.forEach(t=>{ if(scnClinched(ids, w2, later, t, 1)) oMasks[t].add(m); });
   }
-  const build = (masks, bucket)=>{
-    live.forEach(t=>{
+  const build = (masks, bucket, order, list)=>{
+    list.forEach(t=>{
       if(!masks[t].size) return;
       out.raw[bucket][t] = [...masks[t]].sort((a, b)=> a - b);
-      out[bucket].push({ id: t, paths: scnPatterns(masks[t], k) });
+      out[bucket].push({ id: t, blocks: scnBlocks(masks[t], k, target, t, order) });
     });
   };
-  build(cMasks, 'clinch'); build(eMasks, 'elim');
+  build(cMasks, 'clinch', ['win', 'loss'], live);
+  build(eMasks, 'elim', ['loss', 'win'], live);
+  build(oMasks, 'seed1', ['win', 'loss'], live1);
   return out;
 }
 
 function scnName(id){ const o = data.owners.find(o=> o.id === id); return o ? (o.team || o.name) : 'Unknown team'; }
 
-function scnPathText(sc, path, teamId){
-  const parts = [];
-  sc.games.forEach((g, i)=>{
-    if(path[i] === 2) return;
-    const winner = path[i] === 1 ? g.home : g.away, loser = path[i] === 1 ? g.away : g.home;
-    parts.push({ text: `${scnName(winner)} beat ${scnName(loser)}`, mine: g.home === teamId || g.away === teamId });
-  });
-  parts.sort((a, b)=> (b.mine ? 1 : 0) - (a.mine ? 1 : 0));
-  return parts.map(p=> p.text).join(' + ');
+// One scenario as text: "Taco Flavored Kisses win and Oh No I Suck Again win"
+function scnPathText(sc, path){
+  return path.map(lit=>{
+    const g = sc.games[lit.g];
+    return `${scnName(lit.home ? g.home : g.away)} win`;
+  }).join(' and ');
+}
+
+function scnHeading(name, bucket, kind, taut, first){
+  const what = bucket === 'seed1' ? 'the 1 seed' : 'a playoff berth';
+  let t;
+  if(bucket === 'elim'){
+    t = kind === 'win' ? `${name} can be eliminated with a win`
+      : kind === 'loss' ? `${name} are eliminated with a loss`
+      : kind === 'either' ? `${name} are eliminated with a win or a loss`
+      : `${name} are eliminated`;
+  } else {
+    t = kind === 'win' ? `${name} clinch ${what} with a win`
+      : kind === 'loss' ? `${name} can clinch${bucket === 'seed1' ? ' the 1 seed' : ''} with a loss`
+      : kind === 'either' ? `${name} clinch ${what} with a win or a loss`
+      : `${name} clinch ${what}`;
+  }
+  const needsIf = !taut && !first;
+  return needsIf ? `${t} IF` : t;
+}
+
+function scnItemHTML(sc, item, bucket, maxPaths){
+  const name = scnName(item.id);
+  const cap = maxPaths || 25;
+  return `<div class="scn-team">${item.blocks.map((blk, bi)=>{
+    const shown = blk.paths.slice(0, cap);
+    const lines = shown.map((pth, i)=> `<div>${i === 0 ? 'AND' : 'OR'} ${scnPathText(sc, pth)}</div>`);
+    if(blk.paths.length > cap) lines.push(`<div>OR …and ${blk.paths.length - cap} more combinations</div>`);
+    return `<div class="scn-head"><strong>${name}</strong>${scnHeading('', bucket, blk.kind, blk.taut, bi === 0)}</div>` +
+      (lines.length ? `<div class="scn-lines">${lines.join('')}</div>` : '');
+  }).join('')}</div>`;
 }
 
 function scnBlockHTML(sc, bucket){
   const isClinch = bucket === 'clinch';
   const settled = isClinch ? sc.clinchedNow : sc.eliminatedNow;
   const items = sc[bucket];
-  if(!settled.length && !items.length) return '<p>N/A</p>';
-  const verb = isClinch ? 'clinches a playoff spot if' : 'is eliminated if';
-  const MAXP = 12;
+  const seedSettled = isClinch ? sc.seed1Now : [];
+  const seedItems = isClinch ? sc.seed1 : [];
+  if(!settled.length && !items.length && !seedSettled.length && !seedItems.length) return '<p>N/A</p>';
   let html = '';
-  if(settled.length){
-    html += `<p><strong>${isClinch ? 'Clinched' : 'Eliminated'}:</strong> ${settled.map(scnName).join(', ')}</p>`;
-  }
+  if(settled.length) html += `<p><strong>${isClinch ? 'Clinched' : 'Eliminated'}:</strong> ${settled.map(scnName).join(', ')}</p>`;
   if(items.length){
     html += `<p class="scn-meta">Week ${sc.week}. ${isClinch
       ? 'Guaranteed a top-8 finish however the rest of the season goes, counting every tie against the team.'
-      : 'Cannot reach the top 8 even by winning out and winning every tiebreaker.'} Any one of these is enough.</p>`;
-    items.forEach(it=>{
-      const shown = it.paths.slice(0, MAXP);
-      html += `<div class="scn-team"><strong>${scnName(it.id)}</strong> ${verb}:<ul>${shown.map(pth=> `<li>${scnPathText(sc, pth, it.id)}</li>`).join('')}${it.paths.length > MAXP ? `<li>…and ${it.paths.length - MAXP} more combinations</li>` : ''}</ul></div>`;
-    });
+      : 'Cannot reach the top 8 even by winning out and winning every tiebreaker.'} Any one scenario is enough; each scenario lists results that all have to happen.</p>`;
+    html += items.map(it=> scnItemHTML(sc, it, bucket)).join('');
+  }
+  if(seedSettled.length) html += `<p><strong>Clinched the 1 seed:</strong> ${seedSettled.map(scnName).join(', ')}</p>`;
+  if(seedItems.length){
+    html += `<p class="scn-meta">1 seed, Week ${sc.week}. Guaranteed to finish first however the rest of the season goes, counting every tie against the team.</p>`;
+    html += seedItems.map(it=> scnItemHTML(sc, it, 'seed1')).join('');
   }
   return html;
+}
+// Row styling: a clinched team is bold across the row; its seed number is bold only when it is locked into that seed.
+function scnRowClass(sc, ownerId, seed){
+  if(!sc || !sc.clinchedNow.includes(ownerId)) return '';
+  return sc.seedLocked[ownerId] === seed ? ' class="clinched seed-locked"' : ' class="clinched"';
 }
 function playoffClinchHTML(sc){ return sc ? scnBlockHTML(sc, 'clinch') : '<p>N/A</p>'; }
 function playoffElimHTML(sc){ return sc ? scnBlockHTML(sc, 'elim') : null; }
