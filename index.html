@@ -748,7 +748,8 @@ function applyDataDefaults(){
   if(!data.lineupSlots || !Array.isArray(data.lineupSlots) || data.lineupSlots.length === 0){
     data.lineupSlots = [['QB'],['RB'],['RB','WR'],['WR','TE'],['WR','TE'],['TE'],['DEF'],['K']];
   }
-  currentSeason = data.seasons[data.seasons.length-1];
+  // Open on the most recent year, not whichever season was added last (adding an older year shouldn't change the default).
+  currentSeason = data.seasons.reduce((a, b)=> Number(b) > Number(a) ? b : a);
   currentDigestYear = data.currentDigest ? data.currentDigest.year : DIGEST_YEARS[DIGEST_YEARS.length-1];
   currentDigestWeek = data.currentDigest ? data.currentDigest.week : '1A';
 }
