@@ -309,6 +309,10 @@
   .review-score-row{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:.55rem .8rem; }
   .review-table td.legend{ font-size:.68rem; color:var(--ink-soft); }
   .review-legend-note{ font-size:.7rem; color:var(--ink-soft); margin-top:.3rem; }
+  .scn-meta{ font-size:.75rem; color:var(--ink-soft); margin:.2rem 0 .5rem; }
+  .scn-team{ margin:.5rem 0; font-size:.85rem; }
+  .scn-team ul{ margin:.25rem 0 0 1.1rem; padding:0; }
+  .scn-team li{ margin:.2rem 0; }
 
   /* Playoff bracket (shared by Standings tab and Digest) */
   .bracket-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.8rem; align-items:center; max-width:640px; margin:0 auto; }
@@ -1531,7 +1535,9 @@ function renderWeeklyReviewStats(entry){
   const standings = orderedStandings(year, week);
   const top8 = standings.slice(0, 8);
   const rest = standings.slice(8);
-  const eliminated = data.owners.length >= 8 ? computeEliminations(year, week) : [];
+  const scn = playoffScenarios(year, week);
+  const scnElim = playoffElimHTML(scn);
+  const eliminated = scnElim === null && data.owners.length >= 8 ? computeEliminations(year, week) : [];
   const pr = data.owners.length ? computePowerRankings(year, week) : [];
 
   function standingsRows(rows, offset){
@@ -1561,10 +1567,10 @@ function renderWeeklyReviewStats(entry){
       <tbody>${pr.length ? pr.map((r,i)=>`<tr><td>${i+1}</td><td>${r.owner.team || r.owner.name}</td><td class="num">${r.composite.toFixed(1)} pts</td></tr>`).join('') : `<tr><td colspan="3" style="color:var(--ink-soft); font-size:.8rem;">No teams yet</td></tr>`}</tbody></table></div>
 
       <h3>Playoff Scenarios</h3>
-      <p>N/A</p>
+      ${playoffClinchHTML(scn)}
 
       <h3>Possible Eliminations</h3>
-      <p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>
+      ${scnElim !== null ? scnElim : `<p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>`}
 
       <h3>Week-to-Week Movement</h3>
       <div id="reviewChartRoot"></div>
@@ -2805,12 +2811,14 @@ function renderSeasonStandings(){
 
   renderPlayoffBracket(document.getElementById('standingsBracket'), currentSeason);
 
-  const eliminated = data.owners.length >= 8 ? computeEliminations(currentSeason) : [];
+  const scn = playoffScenarios(currentSeason, null);
+  const scnElim = playoffElimHTML(scn);
+  const oldElim = scnElim === null && data.owners.length >= 8 ? computeEliminations(currentSeason) : [];
   document.getElementById('standingsScenarios').innerHTML = `
     <h2 class="section-title" style="margin-top:1.4rem;">Playoff Clinching Scenarios</h2>
-    <p>N/A</p>
+    ${playoffClinchHTML(scn)}
     <h2 class="section-title" style="margin-top:1.4rem;">Possible Eliminations</h2>
-    <p>${eliminated.length ? eliminated.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>
+    ${scnElim !== null ? scnElim : `<p>${oldElim.length ? oldElim.map(o=> o.team || o.name).join(', ') : 'N/A'}</p>`}
   `;
   renderPredictor(true);
 }
@@ -3582,7 +3590,203 @@ function lastPlayedWeek(year){
   return games.reduce((max,g)=> Math.max(max, g.week), 0);
 }
 
+/* ---------- Playoff clinching & elimination scenarios ---------- */
+// Everything here is computed live from the schedule and scores, so it updates by itself as scores are logged.
+// "Clinched"   = in the top 8 in EVERY possible finish, counting every tie in the standings against the team.
+// "Eliminated" = outside the top 8 in EVERY possible finish, even winning out and winning every tiebreaker.
+const REG_SEASON_WEEKS = 14;
+const PLAYOFF_SPOTS = 8;
+
+// Largest set of games that can each hand their one win to a team that still has room (cap[team] > 0).
+function scnMatch(games, cap){
+  const adj = games.map(([a, b])=> [a, b].filter(t=> cap[t] > 0));
+  const assigned = {};
+  Object.keys(cap).forEach(t=> assigned[t] = []);
+  function tryAssign(g, visited){
+    for(const t of adj[g]){
+      if(visited.has(t)) continue;
+      visited.add(t);
+      if(assigned[t].length < cap[t]){ assigned[t].push(g); return true; }
+      for(let i = 0; i < assigned[t].length; i++){
+        if(tryAssign(assigned[t][i], visited)){ assigned[t][i] = g; return true; }
+      }
+    }
+    return false;
+  }
+  let size = 0;
+  for(let g = 0; g < games.length; g++){ if(tryAssign(g, new Set())) size++; }
+  return size;
+}
+
+// True if team X is in the top `spots` no matter how the remaining games go (X losing out, ties against X).
+function scnClinched(ids, w, games, X, spots){
+  const T = w[X], free = [], base = {};
+  ids.forEach(t=> base[t] = w[t]);
+  games.forEach(([a, b])=>{ if(a === X) base[b] += 1; else if(b === X) base[a] += 1; else free.push([a, b]); });
+  const others = ids.filter(t=> t !== X);
+  const sure = others.filter(t=> base[t] >= T - 1e-9);
+  if(sure.length >= spots) return false;
+  const left = {}; others.forEach(t=> left[t] = 0);
+  free.forEach(([a, b])=>{ left[a]++; left[b]++; });
+  const cand = others.filter(t=> base[t] < T - 1e-9 && base[t] + left[t] >= T - 1e-9);
+  const need = spots - sure.length;
+  if(cand.length < need) return true;
+  let found = false;
+  (function pick(start, chosen){
+    if(found) return;
+    if(chosen.length === need){
+      const cap = {}; let total = 0;
+      chosen.forEach(t=>{ const d = Math.ceil(T - base[t] - 1e-9); cap[t] = d; total += d; });
+      if(total <= free.length && scnMatch(free, cap) === total) found = true;
+      return;
+    }
+    for(let i = start; i < cand.length && !found; i++){ chosen.push(cand[i]); pick(i + 1, chosen); chosen.pop(); }
+  })(0, []);
+  return !found;
+}
+
+// True if team X cannot finish in the top `spots` in any completion (X winning out, ties going X's way).
+function scnEliminated(ids, w, games, X, spots){
+  const T = w[X] + games.filter(([a, b])=> a === X || b === X).length;
+  const others = ids.filter(t=> t !== X);
+  const m = ids.length - spots;                       // others that must finish at or below X
+  const cand = others.filter(t=> w[t] <= T + 1e-9);
+  if(cand.length < m) return true;
+  const rest = games.filter(([a, b])=> a !== X && b !== X);
+  let alive = false;
+  (function pick(start, chosen){
+    if(alive) return;
+    if(chosen.length === m){
+      const cap = {}; chosen.forEach(t=> cap[t] = Math.floor(T - w[t] + 1e-9));
+      const ll = rest.filter(([a, b])=> cap[a] !== undefined && cap[b] !== undefined);
+      if(scnMatch(ll, cap) === ll.length) alive = true;
+      return;
+    }
+    for(let i = start; i < cand.length && !alive; i++){ chosen.push(cand[i]); pick(i + 1, chosen); chosen.pop(); }
+  })(0, []);
+  return !alive;
+}
+
+// Shortest sets of results (over the week's games) that guarantee the outcome. digit: 1 = home wins, 0 = away wins, 2 = any.
+function scnPatterns(maskSet, k){
+  const total = 1 << k, pow3 = []; for(let i = 0; i <= k; i++) pow3[i] = Math.pow(3, i);
+  const n = pow3[k], valid = new Array(n);
+  const decode = code=>{ const d = []; for(let i = 0; i < k; i++){ d.push(Math.floor(code / pow3[i]) % 3); } return d; };
+  for(let code = 0; code < n; code++){
+    const d = decode(code); let fm = 0, fv = 0;
+    for(let i = 0; i < k; i++){ if(d[i] !== 2){ fm |= (1 << i); if(d[i] === 1) fv |= (1 << i); } }
+    let ok = true;
+    for(let m = 0; m < total; m++){ if((m & fm) === fv && !maskSet.has(m)){ ok = false; break; } }
+    valid[code] = ok;
+  }
+  const primes = [];
+  for(let code = 0; code < n; code++){
+    if(!valid[code]) continue;
+    const d = decode(code); let prime = true;
+    for(let i = 0; i < k && prime; i++){ if(d[i] !== 2 && valid[code + (2 - d[i]) * pow3[i]]) prime = false; }
+    if(prime) primes.push(d);
+  }
+  primes.sort((a, b)=> (a.filter(x=> x !== 2).length - b.filter(x=> x !== 2).length) || (a < b ? -1 : 1));
+  return primes;
+}
+
+// throughWeek: null = use every score entered (Standings tab); a number = the picture as of the end of that week (Digest).
+// statusOnly: skip the scenario enumeration and just report who is already clinched / eliminated.
+function playoffScenarios(year, throughWeek, statusOnly){
+  const owners = data.owners, ids = owners.map(o=> o.id);
+  if(ids.length <= PLAYOFF_SPOTS) return null;
+  const idSet = new Set(ids);
+  const sched = (data.schedule[year] || []).filter(g=> g.week <= REG_SEASON_WEEKS && idSet.has(g.homeId) && idSet.has(g.awayId) && g.homeId !== g.awayId);
+  const per = {}; ids.forEach(t=> per[t] = 0);
+  sched.forEach(g=>{ per[g.homeId]++; per[g.awayId]++; });
+  if(ids.some(t=> per[t] !== REG_SEASON_WEEKS)) return null;       // only trust it once the whole regular season is on the schedule
+  const done = g=> isPlayed(g) && (throughWeek == null || g.week <= throughWeek);
+  const w = {}; ids.forEach(t=> w[t] = 0);
+  sched.filter(done).forEach(g=>{
+    if(g.homeScore > g.awayScore) w[g.homeId]++;
+    else if(g.homeScore < g.awayScore) w[g.awayId]++;
+    else { w[g.homeId] += 0.5; w[g.awayId] += 0.5; }
+  });
+  const open = sched.filter(g=> !done(g));
+  const allPairs = open.map(g=> [g.homeId, g.awayId]);
+  const clinchedNow = ids.filter(t=> scnClinched(ids, w, allPairs, t, PLAYOFF_SPOTS));
+  const eliminatedNow = ids.filter(t=> scnEliminated(ids, w, allPairs, t, PLAYOFF_SPOTS));
+  const out = { week: null, games: [], clinchedNow, eliminatedNow, clinch: [], elim: [], raw: { clinch: {}, elim: {} } };
+  if(statusOnly || !open.length) return out;
+
+  const week = Math.min(...open.map(g=> g.week));
+  const target = open.filter(g=> g.week === week);
+  const later = open.filter(g=> g.week !== week).map(g=> [g.homeId, g.awayId]);
+  const k = target.length;
+  out.week = week; out.games = target.map(g=> ({ home: g.homeId, away: g.awayId }));
+  if(k === 0 || k > 10) return out;
+
+  const settled = new Set([...clinchedNow, ...eliminatedNow]);
+  const live = ids.filter(t=> !settled.has(t));
+  const cMasks = {}, eMasks = {};
+  live.forEach(t=>{ cMasks[t] = new Set(); eMasks[t] = new Set(); });
+  for(let m = 0; m < (1 << k); m++){
+    const w2 = Object.assign({}, w);
+    target.forEach((g, i)=>{ w2[(m >> i) & 1 ? g.homeId : g.awayId] += 1; });
+    live.forEach(t=>{
+      if(scnClinched(ids, w2, later, t, PLAYOFF_SPOTS)) cMasks[t].add(m);
+      if(scnEliminated(ids, w2, later, t, PLAYOFF_SPOTS)) eMasks[t].add(m);
+    });
+  }
+  const build = (masks, bucket)=>{
+    live.forEach(t=>{
+      if(!masks[t].size) return;
+      out.raw[bucket][t] = [...masks[t]].sort((a, b)=> a - b);
+      out[bucket].push({ id: t, paths: scnPatterns(masks[t], k) });
+    });
+  };
+  build(cMasks, 'clinch'); build(eMasks, 'elim');
+  return out;
+}
+
+function scnName(id){ const o = data.owners.find(o=> o.id === id); return o ? (o.team || o.name) : 'Unknown team'; }
+
+function scnPathText(sc, path, teamId){
+  const parts = [];
+  sc.games.forEach((g, i)=>{
+    if(path[i] === 2) return;
+    const winner = path[i] === 1 ? g.home : g.away, loser = path[i] === 1 ? g.away : g.home;
+    parts.push({ text: `${scnName(winner)} beat ${scnName(loser)}`, mine: g.home === teamId || g.away === teamId });
+  });
+  parts.sort((a, b)=> (b.mine ? 1 : 0) - (a.mine ? 1 : 0));
+  return parts.map(p=> p.text).join(' + ');
+}
+
+function scnBlockHTML(sc, bucket){
+  const isClinch = bucket === 'clinch';
+  const settled = isClinch ? sc.clinchedNow : sc.eliminatedNow;
+  const items = sc[bucket];
+  if(!settled.length && !items.length) return '<p>N/A</p>';
+  const verb = isClinch ? 'clinches a playoff spot if' : 'is eliminated if';
+  const MAXP = 12;
+  let html = '';
+  if(settled.length){
+    html += `<p><strong>${isClinch ? 'Clinched' : 'Eliminated'}:</strong> ${settled.map(scnName).join(', ')}</p>`;
+  }
+  if(items.length){
+    html += `<p class="scn-meta">Week ${sc.week}. ${isClinch
+      ? 'Guaranteed a top-8 finish however the rest of the season goes, counting every tie against the team.'
+      : 'Cannot reach the top 8 even by winning out and winning every tiebreaker.'} Any one of these is enough.</p>`;
+    items.forEach(it=>{
+      const shown = it.paths.slice(0, MAXP);
+      html += `<div class="scn-team"><strong>${scnName(it.id)}</strong> ${verb}:<ul>${shown.map(pth=> `<li>${scnPathText(sc, pth, it.id)}</li>`).join('')}${it.paths.length > MAXP ? `<li>…and ${it.paths.length - MAXP} more combinations</li>` : ''}</ul></div>`;
+    });
+  }
+  return html;
+}
+function playoffClinchHTML(sc){ return sc ? scnBlockHTML(sc, 'clinch') : '<p>N/A</p>'; }
+function playoffElimHTML(sc){ return sc ? scnBlockHTML(sc, 'elim') : null; }
+
 function computeEliminations(year, throughWeek){
+  // Exact: a team is eliminated only when it cannot reach the top 8 in any possible finish.
+  const sc = playoffScenarios(year, throughWeek, true);
+  if(sc) return sc.eliminatedNow.map(id=> data.owners.find(o=> o.id === id)).filter(Boolean);
+  // Fallback while the season schedule is not fully loaded: simple wins check against the current 8th place.
   const standings = orderedStandings(year, throughWeek);
   if(standings.length < 8) return [];
   const eighthWins = standings[7].rec.wins + 0.5*standings[7].rec.ties;
